@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
-import { supabase } from "@/app/supabase";
+import { getSupabaseBrowserClient } from "@/app/supabaseBrowser";
+
+type UserRole = "customer" | "expert" | "admin";
 
 const linkStyle = {
   color: "#111111",
@@ -13,26 +15,54 @@ const linkStyle = {
 
 export default function AuthNav() {
   const [user, setUser] = useState<User | null>(null);
+  const [role, setRole] = useState<UserRole | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const supabase = getSupabaseBrowserClient();
+
+    if (!supabase) {
+      queueMicrotask(() => setLoading(false));
+      return;
+    }
+
+    const client = supabase;
     let isMounted = true;
 
+    async function loadRole(currentUser: User | null) {
+      if (!currentUser) {
+        return null;
+      }
+
+      const { data } = await client
+        .from("profiles")
+        .select("role")
+        .eq("id", currentUser.id)
+        .maybeSingle<{ role: UserRole }>();
+
+      return data?.role ?? (currentUser.user_metadata?.role as UserRole) ?? null;
+    }
+
     async function loadUser() {
-      const { data } = await supabase.auth.getUser();
+      const { data } = await client.auth.getUser();
+      const profileRole = await loadRole(data.user);
 
       if (isMounted) {
         setUser(data.user);
+        setRole(profileRole);
         setLoading(false);
       }
     }
 
     void loadUser();
 
-    const { data: listener } = supabase.auth.onAuthStateChange(
+    const { data: listener } = client.auth.onAuthStateChange(
       (_event, session) => {
-        setUser(session?.user ?? null);
-        setLoading(false);
+        void loadRole(session?.user ?? null).then((profileRole) => {
+          setUser(session?.user ?? null);
+          setRole(profileRole);
+          setLoading(false);
+        });
       }
     );
 
@@ -43,66 +73,76 @@ export default function AuthNav() {
   }, []);
 
   async function handleLogout() {
+    const supabase = getSupabaseBrowserClient();
+
+    if (!supabase) {
+      return;
+    }
+
     await supabase.auth.signOut();
     setUser(null);
+    setRole(null);
   }
 
   return (
-    <nav
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: "20px",
-        flexWrap: "wrap",
-        justifyContent: "flex-end",
-      }}
-    >
-      <Link href="/experts" style={linkStyle}>
-        전문가 둘러보기
-      </Link>
-      <Link href="/register" style={linkStyle}>
-        전문가 등록하기
-      </Link>
-      <Link href="/dashboard" style={linkStyle}>
-        전문가 대시보드
-      </Link>
-      <Link href="/admin/experts" style={linkStyle}>
-        전문가 승인
-      </Link>
-      <Link href="/admin/requests" style={linkStyle}>
-        상담 관리
-      </Link>
-      <Link href="/admin/launch-checklist" style={linkStyle}>
-        런칭 점검
-      </Link>
-      <Link href="/admin/analytics" style={linkStyle}>
-        행동 분석
+    <nav className="flex flex-wrap items-center justify-end gap-4">
+      <Link href="/beta" style={linkStyle}>
+        Beta Test
       </Link>
 
       {loading ? null : user ? (
         <>
-          <span style={{ color: "#5B675F", fontSize: "14px" }}>
-            {user.email}
-          </span>
+          {role === "admin" ? (
+            <>
+              <Link href="/admin/experts" style={linkStyle}>
+                전문가 승인
+              </Link>
+              <Link href="/admin/requests" style={linkStyle}>
+                상담 관리
+              </Link>
+            </>
+          ) : role === "expert" ? (
+            <>
+              <Link href="/register" style={linkStyle}>
+                전문가 등록
+              </Link>
+              <Link href="/my-consultations" style={linkStyle}>
+                내 상담
+              </Link>
+            </>
+          ) : (
+            <>
+              <Link href="/experts" style={linkStyle}>
+                전문가 둘러보기
+              </Link>
+              <Link href="/my-consultations" style={linkStyle}>
+                내 상담
+              </Link>
+            </>
+          )}
+          <Link href="/dashboard" style={linkStyle}>
+            프로필
+          </Link>
           <button
             type="button"
             onClick={handleLogout}
-            style={{
-              border: "1px solid #D9CFBF",
-              background: "white",
-              borderRadius: "12px",
-              padding: "10px 14px",
-              cursor: "pointer",
-              fontWeight: 800,
-            }}
+            className="rounded-full bg-[#111111] px-4 py-2 text-sm font-black text-white"
           >
             로그아웃
           </button>
         </>
       ) : (
-        <Link href="/login" style={linkStyle}>
-          로그인
-        </Link>
+        <>
+          <Link href="/login" style={linkStyle}>
+            로그인
+          </Link>
+          <Link
+            href="/signup"
+            className="rounded-full bg-[#111111] px-4 py-2 text-sm font-black text-white"
+          >
+            회원가입
+          </Link>
+        </>
       )}
     </nav>
   );
