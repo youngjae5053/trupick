@@ -1,12 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { getSupabaseBrowserClient } from "@/app/supabaseBrowser";
 
 type Expert = {
   id: number;
@@ -15,6 +10,7 @@ type Expert = {
   location: string;
   description: string;
   career: string | null;
+  plan_type: "free" | "premium" | null;
 };
 
 export default function ExpertDetailPage({
@@ -26,6 +22,12 @@ export default function ExpertDetailPage({
 
   useEffect(() => {
     async function fetchExpert() {
+      const supabase = getSupabaseBrowserClient();
+
+      if (!supabase) {
+        return;
+      }
+
       const { data } = await supabase
         .from("experts")
         .select("*")
@@ -81,6 +83,11 @@ export default function ExpertDetailPage({
         <div style={{ marginBottom: "20px" }}>
           <strong>지역</strong>
           <p>{expert.location}</p>
+        </div>
+
+        <div style={{ marginBottom: "20px" }}>
+          <strong>현재 플랜</strong>
+          <p>{expert.plan_type === "premium" ? "프리미엄" : "무료"}</p>
         </div>
 
         <div style={{ marginBottom: "20px" }}>

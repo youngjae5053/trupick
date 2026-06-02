@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/supabase";
+import { getFriendlyErrorMessage } from "@/app/errorMessages";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -37,7 +38,7 @@ export default function SignupPage() {
     setSubmitting(false);
 
     if (error) {
-      setErrorMessage(error.message);
+      setErrorMessage(getFriendlyErrorMessage(error.message));
       return;
     }
 

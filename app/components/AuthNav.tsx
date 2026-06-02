@@ -6,9 +6,9 @@ import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/app/supabase";
 
 const linkStyle = {
-  color: "#111",
+  color: "#111111",
   textDecoration: "none",
-  fontWeight: 700,
+  fontWeight: 800,
 };
 
 export default function AuthNav() {
@@ -63,11 +63,20 @@ export default function AuthNav() {
       <Link href="/register" style={linkStyle}>
         전문가 등록하기
       </Link>
+      <Link href="/dashboard" style={linkStyle}>
+        전문가 대시보드
+      </Link>
       <Link href="/admin/experts" style={linkStyle}>
         전문가 승인
       </Link>
       <Link href="/admin/requests" style={linkStyle}>
         상담 관리
+      </Link>
+      <Link href="/admin/launch-checklist" style={linkStyle}>
+        런칭 점검
+      </Link>
+      <Link href="/admin/analytics" style={linkStyle}>
+        행동 분석
       </Link>
 
       {loading ? null : user ? (
