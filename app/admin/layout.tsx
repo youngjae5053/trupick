@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
-import { supabase } from "@/app/supabase";
+import { getSupabaseBrowserClient } from "@/app/supabaseBrowser";
+
+type UserRole = "customer" | "expert" | "admin";
 
 function isAdmin(user: User | null) {
   if (!user) {
@@ -31,13 +33,40 @@ export default function AdminLayout({
     let isMounted = true;
 
     async function checkAdminAccess() {
+      const supabase = getSupabaseBrowserClient();
+
+      if (!supabase) {
+        if (isMounted) {
+          router.replace("/login");
+        }
+        return;
+      }
+
       const { data, error } = await supabase.auth.getUser();
 
       if (!isMounted) {
         return;
       }
 
-      if (error || !isAdmin(data.user)) {
+      if (error || !data.user) {
+        router.replace("/login");
+        return;
+      }
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", data.user.id)
+        .maybeSingle<{ role: UserRole }>();
+
+      if (!isMounted) {
+        return;
+      }
+
+      const role =
+        profile?.role ?? (data.user.user_metadata?.role as UserRole | undefined);
+
+      if (!isAdmin(data.user) && role !== "admin") {
         router.replace("/login");
         return;
       }

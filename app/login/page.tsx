@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { trackAnalyticsEvent } from "@/app/analytics";
 import { getFriendlyErrorMessage } from "@/app/errorMessages";
 import { getSupabaseBrowserClient } from "@/app/supabaseBrowser";
 
@@ -20,6 +21,20 @@ function getRoleDestination(role: UserRole | null) {
   }
 
   return "/";
+}
+
+function getSafeRedirectPath() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const redirectTo = new URLSearchParams(window.location.search).get("redirect");
+
+  if (!redirectTo || !redirectTo.startsWith("/") || redirectTo.startsWith("//")) {
+    return null;
+  }
+
+  return redirectTo;
 }
 
 export default function LoginPage() {
@@ -68,7 +83,15 @@ export default function LoginPage() {
     }
 
     setSubmitting(false);
-    router.push(getRoleDestination(role));
+    void trackAnalyticsEvent({
+      eventName: "login",
+      page: "/login",
+      metadata: {
+        role: role ?? "customer",
+        remember_me: rememberMe,
+      },
+    });
+    router.push(getSafeRedirectPath() || getRoleDestination(role));
   }
 
   return (

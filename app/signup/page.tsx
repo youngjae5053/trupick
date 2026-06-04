@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { trackAnalyticsEvent } from "@/app/analytics";
 import { getFriendlyErrorMessage } from "@/app/errorMessages";
 import { getSupabaseBrowserClient } from "@/app/supabaseBrowser";
 
@@ -126,6 +127,13 @@ export default function SignupPage() {
     setSuccessMessage(
       "회원가입이 완료되었습니다. 가입 후 인증 메일을 확인해주세요."
     );
+    void trackAnalyticsEvent({
+      eventName: "signup",
+      page: "/signup",
+      metadata: {
+        role,
+      },
+    });
     window.setTimeout(() => router.push("/login"), 1800);
   }
 

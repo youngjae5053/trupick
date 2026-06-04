@@ -15,6 +15,9 @@ type AnalyticsEvent = {
 
 const trackedEvents: AnalyticsEventName[] = [
   "page_view",
+  "signup",
+  "login",
+  "expert_register",
   "expert_view",
   "consultation_request",
   "review_created",
@@ -25,6 +28,9 @@ const trackedEvents: AnalyticsEventName[] = [
 
 const eventLabels: Record<AnalyticsEventName, string> = {
   page_view: "페이지 조회",
+  signup: "회원가입",
+  login: "로그인",
+  expert_register: "전문가 등록",
   expert_view: "전문가 조회",
   consultation_request: "상담 신청",
   review_created: "후기 작성",

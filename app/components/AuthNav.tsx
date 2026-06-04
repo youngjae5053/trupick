@@ -13,6 +13,10 @@ const linkStyle = {
   fontWeight: 800,
 };
 
+const secondaryMobileLinkStyle = {
+  ...linkStyle,
+};
+
 export default function AuthNav() {
   const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<UserRole | null>(null);
@@ -85,8 +89,8 @@ export default function AuthNav() {
   }
 
   return (
-    <nav className="flex flex-wrap items-center justify-end gap-4">
-      <Link href="/beta" style={linkStyle}>
+    <nav className="flex w-full flex-wrap items-center justify-start gap-2 text-sm sm:w-auto sm:justify-end sm:gap-4">
+      <Link href="/beta" style={secondaryMobileLinkStyle} className="hidden sm:inline">
         Beta Test
       </Link>
 
@@ -99,6 +103,13 @@ export default function AuthNav() {
               </Link>
               <Link href="/admin/requests" style={linkStyle}>
                 상담 관리
+              </Link>
+              <Link
+                href="/admin/reviews"
+                style={secondaryMobileLinkStyle}
+                className="hidden sm:inline"
+              >
+                리뷰 관리
               </Link>
             </>
           ) : role === "expert" ? (
@@ -120,6 +131,9 @@ export default function AuthNav() {
               </Link>
             </>
           )}
+          <Link href="/mypage" style={linkStyle}>
+            마이페이지
+          </Link>
           <Link href="/dashboard" style={linkStyle}>
             프로필
           </Link>

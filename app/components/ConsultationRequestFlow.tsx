@@ -11,6 +11,7 @@ type ConsultationMethod = "Online" | "Visit" | "Center";
 
 type FormState = {
   name: string;
+  email: string;
   phone: string;
   method: ConsultationMethod;
   goal: string;
@@ -23,6 +24,7 @@ type FormState = {
 
 const initialForm: FormState = {
   name: "",
+  email: "",
   phone: "",
   method: "Online",
   goal: "",
@@ -103,7 +105,11 @@ export default function ConsultationRequestFlow({
 
   const canGoNext = useMemo(() => {
     if (step === 0) {
-      return form.name.trim().length > 0 && form.phone.trim().length > 0;
+      return (
+        form.name.trim().length > 0 &&
+        form.email.includes("@") &&
+        form.phone.trim().length > 0
+      );
     }
 
     if (step === 1) {
@@ -141,11 +147,14 @@ export default function ConsultationRequestFlow({
 
     setSubmitting(true);
 
+    const { data: userData } = await supabase.auth.getUser();
+
     const structuredMessage = {
       version: 1,
       expert_id: expertId ?? null,
       expert_name: expertName || null,
       customer_name: form.name,
+      customer_email: form.email,
       phone: form.phone,
       method: form.method,
       goal: form.goal,
@@ -156,11 +165,38 @@ export default function ConsultationRequestFlow({
       additional_message: form.additionalMessage,
     };
 
+    const simpleMessage = [
+      `상담 목적: ${form.goal}`,
+      `현재 고민: ${form.problem}`,
+      `원하는 결과: ${form.desiredResult}`,
+      `희망 일정: ${form.preferredDay} · ${form.preferredTime}`,
+      `상담 방식: ${form.method}`,
+      form.additionalMessage ? `추가 메시지: ${form.additionalMessage}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    const serviceRequestPayload = {
+      customer_name: form.name,
+      customer_email: form.email,
+      customer_phone: form.phone,
+      category: form.goal || "상담 신청",
+      message: simpleMessage,
+      expert_id: expertId ?? null,
+      status: "pending",
+    };
+
+    const { error: serviceError } = await supabase
+      .from("consultation_requests")
+      .insert([serviceRequestPayload]);
+
     const requestPayload = {
       customer_name: form.name,
       phone: form.phone,
       message: JSON.stringify(structuredMessage),
       expert_id: expertId ?? null,
+      user_id: userData.user?.id ?? null,
+      status: "pending",
     };
 
     const { error } = await supabase
@@ -175,13 +211,22 @@ export default function ConsultationRequestFlow({
     const shouldRetryWithoutExpertName =
       error &&
       (error.message.includes("expert_name") ||
+        error.message.includes("user_id") ||
+        error.message.includes("status") ||
         error.message.includes("schema cache"));
 
     const retryResult = shouldRetryWithoutExpertName
-      ? await supabase.from("requests").insert([requestPayload])
+      ? await supabase.from("requests").insert([
+          {
+            customer_name: form.name,
+            phone: form.phone,
+            message: JSON.stringify(structuredMessage),
+            expert_id: expertId ?? null,
+          },
+        ])
       : null;
 
-    const submitError = retryResult?.error ?? error;
+    const submitError = serviceError ?? retryResult?.error ?? error;
 
     setSubmitting(false);
 
@@ -216,14 +261,14 @@ export default function ConsultationRequestFlow({
   }
 
   const content = (
-    <div className="w-full rounded-[8px] border border-[#ded8ce] bg-white shadow-[0_24px_80px_rgba(24,24,20,0.16)]">
+    <div className="w-full rounded-t-[8px] border border-[#ded8ce] bg-white shadow-[0_24px_80px_rgba(24,24,20,0.16)] sm:rounded-[8px]">
       <div className="border-b border-[#ede6db] p-5 sm:p-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
             <p className="text-xs font-black uppercase tracking-[0.18em] text-[#0f3d2e]">
               Request Consultation
             </p>
-            <h2 className="mt-2 text-3xl font-black text-[#111111]">
+            <h2 className="mt-2 text-2xl font-black text-[#111111] sm:text-3xl">
               상담 신청
             </h2>
             <p className="mt-2 text-sm font-bold leading-6 text-[#6c665d]">
@@ -236,7 +281,7 @@ export default function ConsultationRequestFlow({
             <button
               type="button"
               onClick={resetAndClose}
-              className="rounded-full border border-[#ded8ce] bg-white px-3 py-2 text-sm font-black text-[#111111]"
+              className="shrink-0 rounded-full border border-[#ded8ce] bg-white px-3 py-2 text-sm font-black text-[#111111]"
             >
               Close
             </button>
@@ -263,12 +308,12 @@ export default function ConsultationRequestFlow({
 
       <div className="p-5 sm:p-6">
         {submitted ? (
-          <div className="rounded-[8px] bg-[#f7f3ea] p-6 text-center">
+          <div className="rounded-[8px] bg-[#f7f3ea] p-5 text-center sm:p-6">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#0f3d2e] text-xl font-black text-white">
               ✓
             </div>
-            <h3 className="mt-5 text-3xl font-black text-[#111111]">
-              상담 요청이 접수되었습니다
+            <h3 className="mt-5 text-2xl font-black text-[#111111] sm:text-3xl">
+              상담 신청이 완료되었습니다
             </h3>
             <p className="mt-3 text-base font-bold leading-7 text-[#5b675f]">
               Request Submitted · 전문가 확인 후 연락드릴게요.
@@ -276,7 +321,7 @@ export default function ConsultationRequestFlow({
             <button
               type="button"
               onClick={variant === "modal" ? resetAndClose : undefined}
-              className="mt-6 rounded-full bg-[#111111] px-6 py-3 text-sm font-black text-white"
+              className="mt-6 w-full rounded-full bg-[#111111] px-6 py-3 text-sm font-black text-white sm:w-auto"
             >
               확인
             </button>
@@ -291,6 +336,14 @@ export default function ConsultationRequestFlow({
                     value={form.name}
                     onChange={(value) => updateForm("name", value)}
                     placeholder="이름을 입력해주세요"
+                  />
+                </div>
+                <div>
+                  <FieldLabel>이메일</FieldLabel>
+                  <TextInput
+                    value={form.email}
+                    onChange={(value) => updateForm("email", value)}
+                    placeholder="name@example.com"
                   />
                 </div>
                 <div>
@@ -407,6 +460,7 @@ export default function ConsultationRequestFlow({
               <div className="grid gap-3">
                 {[
                   ["이름", form.name],
+                  ["이메일", form.email],
                   ["연락처", form.phone],
                   ["상담 방식", form.method],
                   ["상담 목적", form.goal],
@@ -432,7 +486,7 @@ export default function ConsultationRequestFlow({
                 type="button"
                 onClick={() => setStep((current) => Math.max(0, current - 1))}
                 disabled={step === 0}
-                className="rounded-full border border-[#ded8ce] bg-white px-5 py-3 text-sm font-black text-[#111111] disabled:cursor-not-allowed disabled:opacity-35"
+                className="w-full rounded-full border border-[#ded8ce] bg-white px-5 py-3 text-sm font-black text-[#111111] disabled:cursor-not-allowed disabled:opacity-35 sm:w-auto"
               >
                 Back
               </button>
@@ -442,7 +496,7 @@ export default function ConsultationRequestFlow({
                   type="button"
                   onClick={() => setStep((current) => current + 1)}
                   disabled={!canGoNext}
-                  className="rounded-full bg-[#111111] px-6 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-35"
+                  className="w-full rounded-full bg-[#111111] px-6 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-35 sm:w-auto"
                 >
                   Next
                 </button>
@@ -451,7 +505,7 @@ export default function ConsultationRequestFlow({
                   type="button"
                   onClick={submitRequest}
                   disabled={submitting}
-                  className="rounded-full bg-[#0f3d2e] px-6 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-45"
+                  className="w-full rounded-full bg-[#0f3d2e] px-6 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-45 sm:w-auto"
                 >
                   {submitting ? "Submitting..." : "Submit Request"}
                 </button>

@@ -19,6 +19,7 @@ import {
 import { trackAnalyticsEvent } from "@/app/analytics";
 import { getSupabaseBrowserClient } from "@/app/supabaseBrowser";
 import { getProfileCompleteness } from "@/app/profileCompleteness";
+import FavoriteButton from "@/app/components/FavoriteButton";
 
 type ApprovedExpertRow = {
   id: number;
@@ -29,6 +30,8 @@ type ApprovedExpertRow = {
   image_url?: string | null;
 };
 
+type ReviewStats = Record<number, { rating: number; reviewCount: number }>;
+
 const distanceRings = [
   { label: "500m", meters: 500 },
   { label: "1km", meters: 1000 },
@@ -38,6 +41,122 @@ const distanceRings = [
 
 const maxRadarDistance = 5000;
 const allCategoryLabels = expertCategoryLabels;
+
+const subcategoryFilters: Record<ExpertCategory, string[]> = {
+  "운동/재활": [
+    "전체",
+    "PT/퍼스널트레이닝",
+    "재활운동",
+    "체형교정",
+    "필라테스",
+    "스트레칭",
+    "통증관리",
+    "기능회복",
+  ],
+  세무: [
+    "전체",
+    "종합소득세",
+    "부가세",
+    "법인세",
+    "사업자 세무",
+    "프리랜서 세무",
+    "세무조사",
+    "절세 상담",
+  ],
+  법률: [
+    "전체",
+    "계약 검토",
+    "민사",
+    "형사",
+    "노동",
+    "부동산",
+    "생활 법률",
+    "창업 법률",
+  ],
+  "사진/영상": [
+    "전체",
+    "프로필 촬영",
+    "제품 촬영",
+    "숏폼 영상",
+    "유튜브 편집",
+    "웨딩/행사",
+    "브랜드 콘텐츠",
+  ],
+  디자인: [
+    "전체",
+    "로고",
+    "브랜딩",
+    "상세페이지",
+    "UI/UX",
+    "포스터",
+    "SNS 디자인",
+  ],
+  마케팅: [
+    "전체",
+    "인스타그램",
+    "블로그",
+    "퍼포먼스 광고",
+    "콘텐츠 전략",
+    "브랜딩",
+    "상세페이지 기획",
+  ],
+  심리상담: [
+    "전체",
+    "관계 상담",
+    "번아웃",
+    "커리어 고민",
+    "마음 건강",
+    "스트레스 관리",
+    "자존감",
+  ],
+};
+
+const subcategoryKeywords: Record<string, string[]> = {
+  "PT/퍼스널트레이닝": ["PT", "퍼스널", "트레이닝", "근력", "운동"],
+  재활운동: ["재활", "회복", "운동"],
+  체형교정: ["체형", "교정", "자세", "정렬"],
+  필라테스: ["필라테스", "코어", "호흡"],
+  스트레칭: ["스트레칭", "가동성", "유연성"],
+  통증관리: ["통증", "어깨", "허리", "관리"],
+  기능회복: ["기능", "회복", "재활"],
+  종합소득세: ["종합소득세", "소득세", "신고"],
+  부가세: ["부가세", "부가가치세"],
+  법인세: ["법인세", "법인"],
+  "사업자 세무": ["사업자", "세무", "신고"],
+  "프리랜서 세무": ["프리랜서", "개인사업자", "소득세"],
+  세무조사: ["세무조사", "조사", "대응"],
+  "절세 상담": ["절세", "상담", "전략"],
+  "계약 검토": ["계약", "검토", "자문"],
+  민사: ["민사", "분쟁", "손해"],
+  형사: ["형사", "고소", "사건"],
+  노동: ["노동", "근로", "노무"],
+  부동산: ["부동산", "임대차", "매매"],
+  "생활 법률": ["생활", "법률", "상담"],
+  "창업 법률": ["창업", "법률", "사업"],
+  "프로필 촬영": ["프로필", "촬영"],
+  "제품 촬영": ["제품", "촬영", "상업"],
+  "숏폼 영상": ["숏폼", "릴스", "영상"],
+  "유튜브 편집": ["유튜브", "편집", "영상"],
+  "웨딩/행사": ["웨딩", "행사", "촬영"],
+  "브랜드 콘텐츠": ["브랜드", "콘텐츠", "촬영"],
+  로고: ["로고", "브랜드"],
+  브랜딩: ["브랜딩", "브랜드", "아이덴티티"],
+  상세페이지: ["상세페이지", "커머스", "페이지"],
+  "UI/UX": ["UI", "UX", "웹", "모바일"],
+  포스터: ["포스터", "시각", "그래픽"],
+  "SNS 디자인": ["SNS", "인스타그램", "콘텐츠"],
+  인스타그램: ["인스타그램", "SNS", "콘텐츠"],
+  블로그: ["블로그", "콘텐츠", "검색"],
+  "퍼포먼스 광고": ["퍼포먼스", "광고", "Meta", "Google"],
+  "콘텐츠 전략": ["콘텐츠", "전략", "기획"],
+  "상세페이지 기획": ["상세페이지", "기획", "전환"],
+  "관계 상담": ["관계", "상담"],
+  번아웃: ["번아웃", "스트레스", "회복"],
+  "커리어 고민": ["커리어", "진로", "고민"],
+  "마음 건강": ["마음", "심리", "건강"],
+  "스트레스 관리": ["스트레스", "관리", "불안"],
+  자존감: ["자존감", "자기", "마음"],
+};
 
 function formatDistance(meters: number) {
   if (meters < 1000) {
@@ -65,6 +184,33 @@ function sortPremiumFirst(experts: ExpertDiscoveryProfile[]) {
 
     return b.rating - a.rating;
   });
+}
+
+function matchesSubcategory(
+  expert: ExpertDiscoveryProfile,
+  subcategory: string
+) {
+  if (subcategory === "전체") {
+    return true;
+  }
+
+  const normalizedText = [
+    expert.nickname,
+    expert.profession,
+    expert.category,
+    expert.description,
+    expert.career,
+    expert.location,
+    ...expert.certifications,
+    ...expert.specialtyTags,
+  ]
+    .join(" ")
+    .toLowerCase();
+  const keywords = subcategoryKeywords[subcategory] ?? [subcategory];
+
+  return keywords.some((keyword) =>
+    normalizedText.includes(keyword.toLowerCase())
+  );
 }
 
 function deriveCategory(specialty: string): ExpertCategory {
@@ -105,10 +251,12 @@ function deriveCategory(specialty: string): ExpertCategory {
 
 function mapApprovedExperts(
   rows: ApprovedExpertRow[],
-  fallbackExperts: ExpertDiscoveryProfile[]
+  fallbackExperts: ExpertDiscoveryProfile[],
+  reviewStats: ReviewStats = {}
 ): ExpertDiscoveryProfile[] {
   return rows.map((expert, index) => {
     const fallback = fallbackExperts[index % fallbackExperts.length];
+    const stats = reviewStats[expert.id];
 
     return {
       id: expert.id,
@@ -124,12 +272,13 @@ function mapApprovedExperts(
         "TRUPICK에서 승인한 전문가입니다. 상담 목적에 맞춰 실질적인 해결 방향을 제안합니다.",
       career: fallback?.career ?? "TRUPICK Verified Expert",
       certifications: fallback?.certifications ?? [],
+      specialtyTags: fallback?.specialtyTags ?? [],
       consultationMethods: fallback?.consultationMethods ?? ["Online"],
       snsUrl: fallback?.snsUrl ?? null,
       portfolioUrl: fallback?.portfolioUrl ?? null,
       planType: expert.plan_type === "premium" ? "premium" : "free",
-      rating: fallback?.rating ?? 4.9,
-      reviewCount: fallback?.reviewCount ?? 72,
+      rating: stats?.rating ?? 0,
+      reviewCount: stats?.reviewCount ?? 0,
       distanceMeters: fallback?.distanceMeters ?? 1200,
       bearingDegrees: fallback?.bearingDegrees ?? index * 48,
       photoUrl:
@@ -146,9 +295,8 @@ function ExpertsDiscoveryContent({
   initialCategory: ExpertCategory | null;
 }) {
   const [experts, setExperts] = useState<ExpertDiscoveryProfile[]>([]);
-  const [activeCategories, setActiveCategories] = useState<ExpertCategory[]>(
-    initialCategory ? [initialCategory] : allCategoryLabels
-  );
+  const [activeCategory] = useState<ExpertCategory | null>(initialCategory);
+  const [activeSubcategory, setActiveSubcategory] = useState("전체");
   const [selectedExpertId, setSelectedExpertId] = useState<number | null>(null);
   const [locationLabel, setLocationLabel] = useState(mockUserLocation.label);
   const [search, setSearch] = useState("");
@@ -166,20 +314,44 @@ function ExpertsDiscoveryContent({
           .from("experts")
           .select("id, name, specialty, category, plan_type, image_url")
           .eq("approved", true)
-          .or("status.is.null,status.neq.rejected");
+          .eq("approval_status", "approved");
+
+        const { data: reviewRows } = await supabase
+          .from("reviews")
+          .select("expert_id, rating")
+          .returns<Array<{ expert_id: number; rating: number }>>();
+
+        const reviewStats =
+          reviewRows?.reduce<ReviewStats>((stats, review) => {
+            const current = stats[review.expert_id] ?? {
+              rating: 0,
+              reviewCount: 0,
+            };
+            const nextCount = current.reviewCount + 1;
+
+            stats[review.expert_id] = {
+              rating:
+                (current.rating * current.reviewCount + review.rating) /
+                nextCount,
+              reviewCount: nextCount,
+            };
+
+            return stats;
+          }, {}) ?? {};
 
         if (error) {
           const { data: fallbackRows } = await supabase
             .from("experts")
             .select("id, name, specialty, image_url")
-            .eq("approved", true);
+            .eq("approved", true)
+            .eq("approval_status", "approved");
 
           data = fallbackRows
-            ? mapApprovedExperts(fallbackRows, fallbackExperts)
+            ? mapApprovedExperts(fallbackRows, fallbackExperts, reviewStats)
             : [];
         } else {
           data = approvedRows
-            ? mapApprovedExperts(approvedRows, fallbackExperts)
+            ? mapApprovedExperts(approvedRows, fallbackExperts, reviewStats)
             : [];
         }
       }
@@ -201,34 +373,30 @@ function ExpertsDiscoveryContent({
     () => {
       const matchingExperts = experts.filter((expert) => {
         const keyword = search.trim().toLowerCase();
-        const matchesCategory = activeCategories.includes(expert.category);
+        const matchesCategory = activeCategory
+          ? expert.category === activeCategory
+          : allCategoryLabels.includes(expert.category);
+        const matchesDetail =
+          !activeCategory || matchesSubcategory(expert, activeSubcategory);
         const matchesSearch =
           keyword.length === 0 ||
           expert.nickname.toLowerCase().includes(keyword) ||
           expert.profession.toLowerCase().includes(keyword) ||
-          expert.category.toLowerCase().includes(keyword);
+          expert.category.toLowerCase().includes(keyword) ||
+          expert.description.toLowerCase().includes(keyword) ||
+          expert.location.toLowerCase().includes(keyword);
 
-        return matchesCategory && matchesSearch;
+        return matchesCategory && matchesDetail && matchesSearch;
       });
 
       return sortPremiumFirst(matchingExperts);
     },
-    [activeCategories, experts, search]
+    [activeCategory, activeSubcategory, experts, search]
   );
   const selectedExpert =
     filteredExperts.find((expert) => expert.id === selectedExpertId) ??
     filteredExperts[0] ??
     null;
-
-  function toggleCategory(category: ExpertCategory) {
-    setActiveCategories((current) => {
-      const next = current.includes(category)
-        ? current.filter((item) => item !== category)
-        : [...current, category];
-
-      return next.length > 0 ? next : allCategoryLabels;
-    });
-  }
 
   function useDeviceLocation() {
     if (!navigator.geolocation) {
@@ -297,54 +465,175 @@ function ExpertsDiscoveryContent({
           </div>
         </section>
 
-        <section className="mt-12 grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
+        <section className="mt-10 rounded-[8px] border border-[#E5E7EB] bg-white p-5 shadow-[0_18px_60px_rgba(24,24,20,0.06)] sm:p-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-[#0F5132]">
+                Search paths
+              </p>
+              <h2 className="mt-2 text-3xl font-black text-[#111111]">
+                전문가를 찾는 2가지 방법
+              </h2>
+            </div>
+            <p className="max-w-md text-sm font-bold leading-6 text-[#4B5563]">
+              직접 조건을 고르거나, AI가 질문 기반으로 TOP3를 추천하게 할 수
+              있습니다.
+            </p>
+          </div>
+
+          <div className="mt-5 grid gap-4 lg:grid-cols-2">
+            <article className="rounded-[8px] border border-[#E5E7EB] bg-[#FBFAF7] p-5">
+              <span className="inline-flex rounded-full bg-[#0F5132] px-3 py-1 text-xs font-black text-white">
+                직접 검색하기
+              </span>
+              <h3 className="mt-4 text-2xl font-black text-[#111111]">
+                조건이 명확할 때
+              </h3>
+              <p className="mt-3 text-sm font-bold leading-7 text-[#374151]">
+                원하는 분야나 지역을 직접 선택해서 전문가를 찾아보세요.
+              </p>
+              <ul className="mt-4 grid gap-2 text-sm font-bold text-[#111111]">
+                <li>✓ 분야/지역/경력 필터 검색</li>
+                <li>✓ 원하는 조건에 맞는 전문가 탐색</li>
+                <li>✓ 빠르게 직접 비교 가능</li>
+              </ul>
+              <a
+                href="#expert-search"
+                className="mt-5 inline-flex rounded-full bg-[#0F5132] px-5 py-3 text-sm font-black text-white transition hover:bg-[#146C43]"
+              >
+                전문가 찾기
+              </a>
+            </article>
+
+            <article className="rounded-[8px] border border-[#E9D7FE] bg-[#FBF7FF] p-5">
+              <span className="inline-flex rounded-full bg-[#6D28D9] px-3 py-1 text-xs font-black text-white">
+                AI 매칭 받기
+              </span>
+              <h3 className="mt-4 text-2xl font-black text-[#111111]">
+                상황 설명이 필요할 때
+              </h3>
+              <p className="mt-3 text-sm font-bold leading-7 text-[#374151]">
+                몇 가지 질문에 답하면 나에게 딱 맞는 전문가를 추천해드려요.
+              </p>
+              <ul className="mt-4 grid gap-2 text-sm font-bold text-[#111111]">
+                <li>✓ 내 상황에 맞는 전문가 추천</li>
+                <li>✓ 적합도 기반 TOP 3 추천</li>
+                <li>✓ 매칭 이유와 함께 확인 가능</li>
+              </ul>
+              <Link
+                href="/match"
+                className="mt-5 inline-flex rounded-full bg-[#6D28D9] px-5 py-3 text-sm font-black text-white transition hover:bg-[#5B21B6]"
+              >
+                AI 매칭 시작하기
+              </Link>
+            </article>
+          </div>
+
+          <div className="mt-4 rounded-[8px] border border-[#E5E7EB] bg-white px-4 py-3 text-sm font-bold leading-6 text-[#374151]">
+            직접 검색과 AI 매칭을 명확히 분리하여 상황에 맞게 선택할 수
+            있도록 개선했습니다.
+          </div>
+        </section>
+
+        <section
+          id="expert-search"
+          className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start"
+        >
           <div className="min-w-0">
             <section className="rounded-[8px] border border-[#E5E7EB] bg-[#FFFFFF] p-4 shadow-[0_18px_60px_rgba(24,24,20,0.06)] backdrop-blur sm:p-5">
-              <div className="mb-3 flex items-end justify-between gap-3">
-                <div>
-                  <p className="text-xs font-black uppercase tracking-[0.18em] text-[#ff5a5f]">
-                    Categories
-                  </p>
-                  <h2 className="mt-1 text-xl font-black text-[#111111]">
-                    필요한 분야를 선택하세요
-                  </h2>
+              <div className="grid gap-4 lg:grid-cols-[170px_minmax(0,1fr)]">
+                <aside className="rounded-[8px] bg-[#FBFAF7] p-3">
+                  <div className="mb-3 flex items-center justify-between gap-2">
+                    <p className="text-xs font-black uppercase tracking-[0.16em] text-[#0F5132]">
+                      Category
+                    </p>
+                    {activeCategory ? (
+                      <Link
+                        href="/experts"
+                        className="text-xs font-black text-[#111111] underline underline-offset-4"
+                      >
+                        전체 보기
+                      </Link>
+                    ) : null}
+                  </div>
+                  <div className="flex gap-2 overflow-x-auto pb-1 lg:grid lg:overflow-visible lg:pb-0">
+                    {expertCategories.map((category) => {
+                      const isActive = activeCategory === category.label;
+
+                      return (
+                        <Link
+                          key={category.label}
+                          href={getCategoryHref(category.label)}
+                          className={`shrink-0 rounded-[8px] border px-3 py-2 text-sm font-black transition hover:border-[#111111] lg:w-full ${
+                            isActive
+                              ? "border-[#0F5132] bg-[#0F5132] text-white"
+                              : "border-[#E5E7EB] bg-white text-[#111111]"
+                          }`}
+                        >
+                          {category.label}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </aside>
+
+                <div className="min-w-0">
+                  <div className="mb-4 flex items-end justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-[0.18em] text-[#ff5a5f]">
+                        {activeCategory ? "Sub fields" : "Categories"}
+                      </p>
+                      <h2 className="mt-1 text-2xl font-black text-[#111111]">
+                        {activeCategory
+                          ? `${activeCategory} 전문가`
+                          : "필요한 분야를 선택하세요"}
+                      </h2>
+                    </div>
+                  </div>
+
+                  {activeCategory ? (
+                    <div className="flex flex-wrap gap-2">
+                      {subcategoryFilters[activeCategory].map((subcategory) => {
+                        const isActive = activeSubcategory === subcategory;
+
+                        return (
+                          <button
+                            key={subcategory}
+                            type="button"
+                            onClick={() => setActiveSubcategory(subcategory)}
+                            className={`rounded-full border px-4 py-2 text-sm font-black transition ${
+                              isActive
+                                ? "border-[#111111] bg-[#111111] text-white"
+                                : "border-[#E5E7EB] bg-white text-[#374151] hover:border-[#111111]"
+                            }`}
+                          >
+                            {subcategory}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                      {expertCategories.map((category) => (
+                        <Link
+                          key={category.label}
+                          href={getCategoryHref(category.label)}
+                          className="rounded-[8px] border border-[#E5E7EB] bg-white p-3 text-left transition hover:-translate-y-0.5 hover:border-[#111111]"
+                        >
+                          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#111111] text-xs font-black text-white">
+                            {category.icon}
+                          </span>
+                          <span className="mt-3 block text-sm font-bold text-[#111111]">
+                            {category.label}
+                          </span>
+                          <span className="mt-1 block text-xs font-bold leading-5 text-[#4B5563]">
+                            {category.description}
+                          </span>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                {initialCategory ? (
-                  <Link
-                    href="/experts"
-                    className="shrink-0 rounded-full border border-[#ded8ce] bg-white px-3 py-2 text-xs font-black text-[#4d4a44] transition hover:border-[#111111]"
-                  >
-                  전체 보기
-                  </Link>
-                ) : null}
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {expertCategories.map((category) => {
-                  const isActive = activeCategories.includes(category.label);
-
-                  return (
-                    <Link
-                      key={category.label}
-                      href={getCategoryHref(category.label)}
-                      className={`rounded-[8px] border p-3 text-left transition hover:-translate-y-0.5 hover:border-[#111111] ${
-                        isActive
-                          ? "border-[#111111] bg-[#FFFFFF]"
-                          : "border-[#E5E7EB] bg-[#FFFFFF]"
-                      }`}
-                    >
-                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#111111] text-xs font-black text-white">
-                        {category.icon}
-                      </span>
-                      <span className="mt-3 block text-sm font-bold text-[#111111]">
-                        {category.label}
-                      </span>
-                      <span className="mt-1 block text-xs font-bold leading-5 text-[#4B5563]">
-                        {category.description}
-                      </span>
-                    </Link>
-                  );
-                })}
               </div>
             </section>
 
@@ -360,25 +649,14 @@ function ExpertsDiscoveryContent({
               </div>
             </div>
 
-            <div className="-mx-4 mt-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
-              {expertCategories.map((category) => {
-                const isActive = activeCategories.includes(category.label);
-
-                return (
-                  <button
-                    key={category.label}
-                    type="button"
-                    onClick={() => toggleCategory(category.label)}
-                    className={`shrink-0 rounded-full border px-4 py-2 text-sm font-black transition ${
-                      isActive
-                        ? "border-[#111111] bg-[#111111] text-white shadow-sm"
-                        : "border-[#E5E7EB] bg-[#FFFFFF] text-[#4B5563] hover:border-[#111111]"
-                    }`}
-                  >
-                    {category.label}
-                  </button>
-                );
-              })}
+            <div className="mt-4 rounded-[8px] border border-[#E5E7EB] bg-white px-4 py-3 text-sm font-bold leading-6 text-[#4B5563] shadow-sm">
+              {activeCategory
+                ? `${activeCategory} 카테고리${
+                    activeSubcategory === "전체"
+                      ? " 전체"
+                      : ` · ${activeSubcategory}`
+                  } 기준으로 전문가를 보여줍니다.`
+                : "전체 카테고리의 검증 전문가를 검색하고 비교할 수 있습니다."}
             </div>
           </div>
 
@@ -431,9 +709,20 @@ function ExpertsDiscoveryContent({
                       </h2>
                     </div>
                     <div className="rounded-full bg-[#f3f0e8] px-3 py-2 text-sm font-black text-[#111111]">
-                      {selectedExpert.rating.toFixed(2)}
+                      ★ {selectedExpert.rating.toFixed(2)}
                     </div>
                   </div>
+
+                  {selectedExpert.planType === "premium" ? (
+                    <div className="mt-4 rounded-[8px] border border-[#111111] bg-[#111111] p-4 text-white">
+                      <p className="text-xs font-black uppercase tracking-[0.16em]">
+                        Premium Expert
+                      </p>
+                      <p className="mt-2 text-sm font-bold leading-6">
+                        프리미엄 플랜으로 상단 노출과 추천 우선권이 적용된 전문가입니다.
+                      </p>
+                    </div>
+                  ) : null}
 
                   <dl className="mt-5 grid grid-cols-2 gap-3">
                     <div className="rounded-[8px] bg-[#f7f5ef] p-4">
@@ -452,20 +741,36 @@ function ExpertsDiscoveryContent({
                         {formatDistance(selectedExpert.distanceMeters)}
                       </dd>
                     </div>
+                    <div className="rounded-[8px] bg-[#f7f5ef] p-4">
+                      <dt className="text-xs font-bold uppercase tracking-[0.14em] text-[#817b71]">
+                        Reviews
+                      </dt>
+                      <dd className="mt-2 text-sm font-black text-[#171717]">
+                        {selectedExpert.reviewCount}개
+                      </dd>
+                    </div>
                   </dl>
 
-                  <Link
-                    href={`/experts/${selectedExpert.id}`}
-                    className="mt-5 block w-full rounded-full bg-[#111111] px-5 py-4 text-center text-sm font-black text-white transition hover:bg-[#333333]"
-                  >
-                    프로필 자세히 보기
-                  </Link>
-                  <Link
-                    href="/request"
-                    className="mt-2 block w-full rounded-full bg-[#0F5132] px-5 py-4 text-center text-sm font-black text-white transition hover:bg-[#146C43]"
-                  >
-                    Request consultation
-                  </Link>
+                  <div className="mt-5 grid gap-2">
+                    <div className="flex gap-2">
+                      <Link
+                        href={`/experts/${selectedExpert.id}`}
+                        className="min-h-12 flex-1 rounded-full bg-[#111111] px-5 py-4 text-center text-sm font-black text-white transition hover:bg-[#333333]"
+                      >
+                        프로필 자세히 보기
+                      </Link>
+                      <FavoriteButton
+                        expertId={selectedExpert.id}
+                        size="compact"
+                      />
+                    </div>
+                    <Link
+                      href="/request"
+                      className="block w-full rounded-full bg-[#0F5132] px-5 py-4 text-center text-sm font-black text-white transition hover:bg-[#146C43]"
+                    >
+                      Request consultation
+                    </Link>
+                  </div>
                 </div>
               </div>
             ) : (

@@ -1,12 +1,106 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { trackAnalyticsEvent } from "@/app/analytics";
 import { getSupabaseBrowserClient } from "@/app/supabaseBrowser";
 import { getFriendlyErrorMessage } from "@/app/errorMessages";
 
 type UserRole = "customer" | "expert" | "admin";
+
+const verificationSteps = [
+  "자격 정보 확인",
+  "경력 검토",
+  "프로필 품질 검수",
+  "승인 후 노출",
+];
+
+const completenessItems: Array<{
+  key: "photo" | "description" | "career" | "certifications" | "portfolio";
+  label: string;
+}> = [
+  { key: "photo", label: "프로필 사진" },
+  { key: "description", label: "소개" },
+  { key: "career", label: "경력" },
+  { key: "certifications", label: "자격증" },
+  { key: "portfolio", label: "포트폴리오" },
+];
+
+function RegisterStatusShell({
+  eyebrow,
+  title,
+  description,
+  children,
+  tone = "green",
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  children?: React.ReactNode;
+  tone?: "green" | "coral";
+}) {
+  return (
+    <main className="min-h-screen bg-[#F5F1E8] px-4 py-6 text-[#111111] sm:px-6 lg:px-10">
+      <div className="mx-auto w-full max-w-7xl">
+        <header className="mb-6 flex items-center justify-between gap-4">
+          <Link
+            href="/"
+            className="text-2xl font-extrabold tracking-[0.16em] text-[#111111]"
+          >
+            TRUPICK
+          </Link>
+          <Link
+            href="/free-vs-premium"
+            className="rounded-full border border-[#D9CFBF] bg-white px-4 py-2 text-sm font-black text-[#0F5132] transition hover:border-[#111111]"
+          >
+            플랜 비교
+          </Link>
+        </header>
+
+        <section className="grid gap-6 lg:grid-cols-[65fr_35fr] lg:items-start">
+          <div className="rounded-[8px] border border-[#E5E7EB] bg-white p-6 shadow-[0_24px_80px_rgba(24,24,20,0.08)] sm:p-8 lg:p-10">
+            <p
+              className={`text-sm font-black uppercase tracking-[0.2em] ${
+                tone === "coral" ? "text-[#D65339]" : "text-[#0F5132]"
+              }`}
+            >
+              {eyebrow}
+            </p>
+            <h1 className="mt-3 text-4xl font-black tracking-normal text-[#111111] sm:text-5xl">
+              {title}
+            </h1>
+            <p className="mt-4 max-w-2xl text-base font-bold leading-7 text-[#374151]">
+              {description}
+            </p>
+            {children ? <div className="mt-8">{children}</div> : null}
+          </div>
+
+          <aside className="rounded-[8px] border border-[#E5E7EB] bg-white p-6 shadow-[0_24px_80px_rgba(24,24,20,0.08)] lg:sticky lg:top-6">
+            <p className="text-sm font-black uppercase tracking-[0.18em] text-[#0F5132]">
+              Review Process
+            </p>
+            <h2 className="mt-3 text-3xl font-black text-[#111111]">
+              검증 안내
+            </h2>
+            <div className="mt-6 grid gap-4">
+              {verificationSteps.map((item, index) => (
+                <div key={item} className="rounded-[8px] bg-[#FBFAF7] p-4">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#0F5132] text-sm font-black text-white">
+                    {index + 1}
+                  </span>
+                  <p className="mt-3 text-sm font-black leading-6 text-[#111111]">
+                    {item}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </aside>
+        </section>
+      </div>
+    </main>
+  );
+}
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -15,6 +109,9 @@ export default function RegisterPage() {
   const [location, setLocation] = useState("");
   const [description, setDescription] = useState("");
   const [career, setCareer] = useState("");
+  const [certifications, setCertifications] = useState("");
+  const [portfolioUrl, setPortfolioUrl] = useState("");
+  const [socialUrl, setSocialUrl] = useState("");
   const [imageUrlInput, setImageUrlInput] = useState("");
   const [planType, setPlanType] = useState<"free" | "premium" | "">("");
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -74,6 +171,23 @@ export default function RegisterPage() {
     };
   }, [router]);
 
+  const completenessChecks = useMemo(
+    () => ({
+      photo: imageUrlInput.trim().length > 0 || Boolean(imageFile),
+      description: description.trim().length > 0,
+      career: career.trim().length > 0,
+      certifications: certifications.trim().length > 0,
+      portfolio: portfolioUrl.trim().length > 0,
+    }),
+    [career, certifications, description, imageFile, imageUrlInput, portfolioUrl]
+  );
+
+  const completenessScore = useMemo(() => {
+    const completed = Object.values(completenessChecks).filter(Boolean).length;
+
+    return Math.round((completed / completenessItems.length) * 100);
+  }, [completenessChecks]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const supabase = getSupabaseBrowserClient();
@@ -108,6 +222,8 @@ export default function RegisterPage() {
       return;
     }
 
+    const { data: userData } = await supabase.auth.getUser();
+
     let imageUrl = imageUrlInput.trim();
 
     if (imageFile) {
@@ -135,131 +251,119 @@ export default function RegisterPage() {
       location,
       description,
       career,
+      certifications: certifications
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean),
+      portfolio_url: portfolioUrl.trim() || null,
+      sns_url: socialUrl.trim() || null,
       image_url: imageUrl,
       approved: false,
+      user_id: userData.user?.id ?? null,
     };
 
-    const { error } = await supabase.from("experts").insert([
+    const { error: submitError } = await supabase.from("experts").insert([
       {
         ...expertPayload,
         plan_type: planType,
+        approved: false,
+        approval_status: "pending",
         status: "pending",
       },
     ]);
-
-    const retryWithoutStatus =
-      error &&
-      (error.message.includes("status") || error.message.includes("schema cache"))
-        ? await supabase.from("experts").insert([
-            {
-              ...expertPayload,
-              plan_type: planType,
-            },
-          ])
-        : null;
-
-    const retryWithoutPlan =
-      (retryWithoutStatus?.error || error)?.message.includes("plan_type")
-        ? await supabase.from("experts").insert([expertPayload])
-        : null;
-
-    const submitError = retryWithoutPlan?.error ?? retryWithoutStatus?.error ?? error;
 
     if (submitError) {
       console.error(submitError);
       alert(getFriendlyErrorMessage(submitError.message));
     } else {
+      void trackAnalyticsEvent({
+        eventName: "expert_register",
+        page: "/register",
+        metadata: {
+          plan_type: planType,
+          specialty: specialty.trim(),
+          location: location.trim(),
+        },
+      });
       setSubmitted(true);
     }
   }
 
   if (checkingAuth) {
     return (
-      <main className="min-h-screen bg-[#f7f3ea] px-4 py-10 text-[#111111]">
-        <section className="mx-auto max-w-2xl rounded-[8px] border border-[#E5E7EB] bg-white p-8 text-center shadow-sm">
-          <p className="text-sm font-black uppercase tracking-[0.18em] text-[#0F5132]">
-            Checking Session
-          </p>
-          <h1 className="mt-3 text-3xl font-black">로그인 상태를 확인하고 있습니다.</h1>
-          <p className="mt-3 text-sm font-bold leading-7 text-[#4B5563]">
-            전문가 등록은 로그인한 사용자만 이용할 수 있습니다.
-          </p>
-        </section>
-      </main>
+      <RegisterStatusShell
+        eyebrow="Checking Session"
+        title="로그인 상태를 확인하고 있습니다."
+        description="전문가 등록은 로그인한 사용자만 이용할 수 있습니다."
+      />
     );
   }
 
   if (accessDenied) {
     return (
-      <main className="min-h-screen bg-[#f7f3ea] px-4 py-10 text-[#111111]">
-        <section className="mx-auto max-w-2xl rounded-[8px] border border-[#E5E7EB] bg-white p-8 text-center shadow-sm">
-          <p className="text-sm font-black uppercase tracking-[0.18em] text-[#D65339]">
-            Expert Only
-          </p>
-          <h1 className="mt-3 text-4xl font-black">
-            전문가 회원만 등록 가능합니다
-          </h1>
-          <p className="mt-4 text-sm font-bold leading-7 text-[#4B5563]">
-            현재 계정은 고객 회원입니다. 전문가 등록이 필요하다면 전문가 계정으로
-            가입하거나 관리자에게 권한 변경을 요청해주세요.
-          </p>
-          <div className="mt-7 flex flex-wrap justify-center gap-3">
-            <Link
-              href="/experts"
-              className="rounded-full bg-[#111111] px-6 py-3 text-sm font-black text-white"
-            >
-              전문가 둘러보기
-            </Link>
-            <Link
-              href="/signup"
-              className="rounded-full border border-[#E5E7EB] bg-white px-6 py-3 text-sm font-black text-[#111111]"
-            >
-              전문가 계정 만들기
-            </Link>
-          </div>
-        </section>
-      </main>
+      <RegisterStatusShell
+        eyebrow="Expert Only"
+        title="전문가 회원만 등록 가능합니다"
+        description="현재 계정은 고객 회원입니다. 전문가 등록이 필요하다면 전문가 계정으로 가입하거나 관리자에게 권한 변경을 요청해주세요."
+        tone="coral"
+      >
+        <div className="flex flex-wrap gap-3">
+          <Link
+            href="/experts"
+            className="rounded-full bg-[#111111] px-6 py-3 text-sm font-black text-white transition hover:bg-[#0F5132]"
+          >
+            전문가 둘러보기
+          </Link>
+          <Link
+            href="/signup"
+            className="rounded-full border border-[#E5E7EB] bg-white px-6 py-3 text-sm font-black text-[#111111] transition hover:border-[#111111]"
+          >
+            전문가 계정 만들기
+          </Link>
+        </div>
+      </RegisterStatusShell>
     );
   }
 
   if (submitted) {
     return (
-      <main className="min-h-screen bg-[#f7f3ea] px-4 py-10 text-[#111111]">
-        <section className="mx-auto max-w-2xl rounded-[8px] border border-[#E5E7EB] bg-white p-8 text-center shadow-sm">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#0F5132] text-xl font-black text-white">
-            ✓
-          </div>
-          <h1 className="mt-5 text-4xl font-black">등록이 접수되었습니다</h1>
-          <p className="mt-4 text-base font-bold leading-7 text-[#4B5563]">
-            전문가 등록이 접수되었습니다. 관리자 승인 후 노출됩니다.
-          </p>
-          <div className="mt-7 flex flex-wrap justify-center gap-3">
-            <Link
-      href="/"
-      className="rounded-full bg-[#111111] px-6 py-3 text-sm font-black text-white"
-            >
-              홈으로
-            </Link>
-            <button
-              type="button"
-              onClick={() => {
-                setSubmitted(false);
-                setName("");
-                setSpecialty("");
-                setLocation("");
-                setDescription("");
-                setCareer("");
-                setImageUrlInput("");
-                setPlanType("");
-                setImageFile(null);
-              }}
-              className="rounded-full border border-[#E5E7EB] bg-white px-6 py-3 text-sm font-black text-[#111111]"
-            >
-              추가 등록
-            </button>
-          </div>
-        </section>
-      </main>
+      <RegisterStatusShell
+        eyebrow="Registration Submitted"
+        title="검증 신청이 접수되었습니다."
+        description="관리자 승인 후 전문가 목록에 노출됩니다."
+      >
+        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#0F5132] text-xl font-black text-white">
+          ✓
+        </div>
+        <div className="mt-7 flex flex-wrap gap-3">
+          <Link
+            href="/"
+            className="rounded-full bg-[#111111] px-6 py-3 text-sm font-black text-white transition hover:bg-[#0F5132]"
+          >
+            홈으로
+          </Link>
+          <button
+            type="button"
+            onClick={() => {
+              setSubmitted(false);
+              setName("");
+              setSpecialty("");
+              setLocation("");
+              setDescription("");
+              setCareer("");
+              setCertifications("");
+              setPortfolioUrl("");
+              setSocialUrl("");
+              setImageUrlInput("");
+              setPlanType("");
+              setImageFile(null);
+            }}
+            className="rounded-full border border-[#E5E7EB] bg-white px-6 py-3 text-sm font-black text-[#111111] transition hover:border-[#111111]"
+          >
+            추가 등록
+          </button>
+        </div>
+      </RegisterStatusShell>
     );
   }
 
@@ -281,16 +385,16 @@ export default function RegisterPage() {
           </Link>
         </header>
 
-        <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
+        <section className="grid gap-6 lg:grid-cols-[65fr_35fr] lg:items-start">
           <div className="rounded-[8px] border border-[#E5E7EB] bg-white p-5 shadow-[0_24px_80px_rgba(24,24,20,0.08)] sm:p-8">
             <p className="text-sm font-black uppercase tracking-[0.2em] text-[#0F5132]">
               Professional Registration
             </p>
             <h1 className="mt-3 text-4xl font-black tracking-normal text-[#111111] sm:text-5xl">
-              전문가 프로필 등록
+              검증 전문가 신청
             </h1>
             <p className="mt-4 text-base font-bold leading-7 text-[#374151]">
-              TRUPICK에서 검증된 전문가로 활동을 시작해보세요.
+              작성한 정보는 관리자 검토 후 승인된 전문가만 공개됩니다.
             </p>
 
             <form onSubmit={handleSubmit} className="mt-8 grid gap-5">
@@ -341,7 +445,7 @@ export default function RegisterPage() {
 
               <div>
                 <label className="text-sm font-black text-[#111111]">
-                  경력 <span className="text-[#6B7280]">선택</span>
+                  경력 <span className="text-[#374151]">선택</span>
                 </label>
                 <textarea
                   value={career}
@@ -351,9 +455,48 @@ export default function RegisterPage() {
                 />
               </div>
 
+              <div>
+                <label className="text-sm font-black text-[#111111]">
+                  자격증/면허
+                </label>
+                <textarea
+                  value={certifications}
+                  onChange={(event) => setCertifications(event.target.value)}
+                  placeholder="생활스포츠지도사, 건강운동관리사, 세무사 등 쉼표로 구분해 입력해주세요."
+                  className="mt-2 min-h-24 w-full resize-y rounded-[8px] border border-[#D9CFBF] bg-[#FBFAF7] px-4 py-3 text-sm font-bold leading-7 text-[#111111] outline-none placeholder:text-[#9CA3AF] focus:border-[#111111]"
+                />
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="text-sm font-black text-[#111111]">
+                    포트폴리오 링크
+                  </label>
+                  <input
+                    type="url"
+                    value={portfolioUrl}
+                    onChange={(event) => setPortfolioUrl(event.target.value)}
+                    placeholder="https://portfolio.example.com"
+                    className="mt-2 min-h-12 w-full rounded-[8px] border border-[#D9CFBF] bg-[#FBFAF7] px-4 text-sm font-bold text-[#111111] outline-none placeholder:text-[#9CA3AF] focus:border-[#111111]"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-black text-[#111111]">
+                    인스타그램 또는 웹사이트 링크
+                  </label>
+                  <input
+                    type="url"
+                    value={socialUrl}
+                    onChange={(event) => setSocialUrl(event.target.value)}
+                    placeholder="https://instagram.com/trupick"
+                    className="mt-2 min-h-12 w-full rounded-[8px] border border-[#D9CFBF] bg-[#FBFAF7] px-4 text-sm font-bold text-[#111111] outline-none placeholder:text-[#9CA3AF] focus:border-[#111111]"
+                  />
+                </div>
+              </div>
+
               <section className="rounded-[8px] border border-[#D9CFBF] bg-[#FBFAF7] p-4">
                 <p className="text-sm font-black text-[#111111]">
-                  프로필 이미지 URL 또는 이미지 업로드
+                  프로필 이미지 URL
                 </p>
                 <input
                   value={imageUrlInput}
@@ -361,9 +504,9 @@ export default function RegisterPage() {
                   placeholder="https://example.com/profile.jpg"
                   className="mt-3 min-h-12 w-full rounded-[8px] border border-[#D9CFBF] bg-white px-4 text-sm font-bold text-[#111111] outline-none placeholder:text-[#9CA3AF] focus:border-[#111111]"
                 />
-                <label className="mt-3 flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-[8px] border border-dashed border-[#D9CFBF] bg-white px-4 py-5 text-center">
+                <label className="mt-3 flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-[8px] border border-dashed border-[#D9CFBF] bg-white px-4 py-5 text-center transition hover:border-[#111111]">
                   <span className="text-sm font-black text-[#111111]">
-                    이미지 파일 업로드
+                    또는 이미지 파일 업로드
                   </span>
                   <span className="mt-1 text-xs font-bold text-[#374151]">
                     {imageFile ? imageFile.name : "JPG, PNG 파일을 선택해주세요"}
@@ -379,6 +522,27 @@ export default function RegisterPage() {
                     }}
                   />
                 </label>
+              </section>
+
+              <section className="rounded-[8px] border border-[#D9CFBF] bg-[#FBFAF7] p-4">
+                <p className="text-sm font-black text-[#111111]">
+                  검증 안내
+                </p>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  {verificationSteps.map((item, index) => (
+                    <div
+                      key={item}
+                      className="rounded-[8px] border border-[#E5E7EB] bg-white p-4"
+                    >
+                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#0F5132] text-sm font-black text-white">
+                        {index + 1}
+                      </span>
+                      <p className="mt-3 text-sm font-black text-[#111111]">
+                        {item}
+                      </p>
+                    </div>
+                  ))}
+                </div>
               </section>
 
               <section className="rounded-[8px] border border-[#D9CFBF] bg-[#FBFAF7] p-4">
@@ -421,42 +585,96 @@ export default function RegisterPage() {
 
               <button
                 type="submit"
-                className="rounded-full bg-[#0F5132] px-6 py-4 text-sm font-black text-white transition hover:bg-[#146C43]"
+                className="rounded-full bg-[#0F5132] px-6 py-4 text-sm font-black text-white shadow-[0_14px_34px_rgba(15,81,50,0.18)] transition hover:-translate-y-0.5 hover:bg-[#146C43]"
               >
-                전문가 등록 제출
+                검증 신청 제출
               </button>
             </form>
           </div>
 
           <aside className="rounded-[8px] border border-[#E5E7EB] bg-white p-6 shadow-[0_24px_80px_rgba(24,24,20,0.08)] lg:sticky lg:top-6">
             <p className="text-sm font-black uppercase tracking-[0.18em] text-[#0F5132]">
-              Review Process
+              Profile Preview
             </p>
             <h2 className="mt-3 text-3xl font-black text-[#111111]">
-              등록 후 진행 과정
+              Profile Completeness
             </h2>
-            <div className="mt-6 grid gap-4">
-              {[
-                "등록 후 관리자 검토",
-                "승인 완료 후 전문가 목록 노출",
-                "프로필 완성도가 높을수록 추천 가능성 증가",
-              ].map((item, index) => (
+            <div className="mt-5 rounded-[8px] bg-[#FBFAF7] p-5">
+              <div className="flex items-end justify-between gap-4">
+                <p className="text-5xl font-black text-[#111111]">
+                  {completenessScore}%
+                </p>
+                <p className="pb-2 text-sm font-black text-[#0F5132]">
+                  Verified ready
+                </p>
+              </div>
+              <div className="mt-5 h-3 overflow-hidden rounded-full bg-[#E5E7EB]">
                 <div
-                  key={item}
-                  className="rounded-[8px] bg-[#FBFAF7] p-4"
-                >
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#0F5132] text-sm font-black text-white">
-                    {index + 1}
-                  </span>
-                  <p className="mt-3 text-sm font-black leading-6 text-[#111111]">
-                    {item}
-                  </p>
-                </div>
-              ))}
+                  className="h-full rounded-full bg-[#0F5132] transition-all"
+                  style={{ width: `${completenessScore}%` }}
+                />
+              </div>
+              <div className="mt-5 grid gap-2">
+                {completenessItems.map((item) => {
+                  const isComplete =
+                    completenessChecks[item.key];
+
+                  return (
+                    <div
+                      key={item.key}
+                      className="flex items-center justify-between gap-3 rounded-[8px] bg-white p-3"
+                    >
+                      <span className="text-sm font-black text-[#111111]">
+                        {item.label}
+                      </span>
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-black ${
+                          isComplete
+                            ? "bg-[#E8F2EC] text-[#0F5132]"
+                            : "bg-[#F3F4F6] text-[#374151]"
+                        }`}
+                      >
+                        {isComplete ? "완료" : "대기"}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
+
+            <div className="mt-5 grid gap-4">
+              <section className="rounded-[8px] bg-[#FBFAF7] p-4">
+                <h3 className="text-base font-black text-[#111111]">
+                  검증 안내
+                </h3>
+                <ul className="mt-3 grid gap-2 text-sm font-bold leading-6 text-[#374151]">
+                  {verificationSteps.map((item) => (
+                    <li key={item}>- {item}</li>
+                  ))}
+                </ul>
+              </section>
+
+              <section className="rounded-[8px] bg-[#FBFAF7] p-4">
+                <h3 className="text-base font-black text-[#111111]">
+                  신청 상태
+                </h3>
+                <p className="mt-3 text-sm font-bold leading-6 text-[#374151]">
+                  제출 즉시 승인 대기 상태로 저장됩니다.
+                </p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <span className="rounded-full bg-white px-3 py-2 text-xs font-black text-[#111111]">
+                    approved=false
+                  </span>
+                  <span className="rounded-full bg-white px-3 py-2 text-xs font-black text-[#111111]">
+                    approval_status=pending
+                  </span>
+                </div>
+              </section>
+            </div>
+
             <Link
               href="/free-vs-premium"
-              className="mt-6 inline-flex rounded-full border border-[#D9CFBF] bg-white px-5 py-3 text-sm font-black text-[#0F5132]"
+              className="mt-6 inline-flex rounded-full border border-[#D9CFBF] bg-white px-5 py-3 text-sm font-black text-[#0F5132] transition hover:border-[#111111]"
             >
               Free vs Premium 보기
             </Link>

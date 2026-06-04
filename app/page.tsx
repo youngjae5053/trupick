@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import AuthNav from "@/app/components/AuthNav";
+import FavoriteButton from "@/app/components/FavoriteButton";
 import { expertCategories, getCategoryHref } from "@/app/expertCategories";
 import {
   ExpertDiscoveryProfile,
@@ -33,7 +34,10 @@ type LandingExpert = {
   isPremium: boolean;
   photoUrl: string;
   href: string;
+  canFavorite: boolean;
 };
+
+type ReviewStats = Record<number, { rating: number; reviewCount: number }>;
 
 const proofItems = [
   { value: "4.9", label: "평균 만족도" },
@@ -93,20 +97,22 @@ function formatDistance(meters: number) {
 
 function toLandingExperts(
   experts: Expert[],
-  fallbackExperts: ExpertDiscoveryProfile[]
+  fallbackExperts: ExpertDiscoveryProfile[],
+  reviewStats: ReviewStats = {}
 ): LandingExpert[] {
   const source =
     experts.length > 0
       ? experts.map((expert, index) => {
           const fallback = fallbackExperts[index % fallbackExperts.length];
+          const stats = reviewStats[expert.id];
 
           return {
             id: expert.id,
             name: expert.name,
             profession: expert.specialty,
             category: expert.category || fallback?.category || "전문가",
-            rating: fallback?.rating || 4.9,
-            reviews: 80 + index * 23,
+            rating: stats?.rating ?? 0,
+            reviews: stats?.reviewCount ?? 0,
             distance: fallback ? formatDistance(fallback.distanceMeters) : "1.2km",
             isPremium: expert.plan_type === "premium",
             photoUrl:
@@ -114,6 +120,7 @@ function toLandingExperts(
               fallback?.photoUrl ||
               "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=240&q=80",
             href: `/experts/${expert.id}`,
+            canFavorite: true,
           };
         })
       : fallbackExperts.slice(0, 3).map((expert) => ({
@@ -127,6 +134,7 @@ function toLandingExperts(
           isPremium: expert.planType === "premium",
           photoUrl: expert.photoUrl,
           href: "/experts",
+          canFavorite: false,
         }));
 
   return source
@@ -139,6 +147,7 @@ export default function HomePage() {
   const [fallbackExperts, setFallbackExperts] = useState<ExpertDiscoveryProfile[]>(
     []
   );
+  const [reviewStats, setReviewStats] = useState<ReviewStats>({});
 
   useEffect(() => {
     let isMounted = true;
@@ -159,11 +168,35 @@ export default function HomePage() {
         .from("experts")
         .select("*")
         .eq("approved", true)
-        .or("status.is.null,status.neq.rejected")
+        .eq("approval_status", "approved")
         .order("plan_type", { ascending: false })
         .limit(3);
 
+      const { data: reviewRows } = await supabase
+        .from("reviews")
+        .select("expert_id, rating")
+        .returns<Array<{ expert_id: number; rating: number }>>();
+
+      const nextReviewStats =
+        reviewRows?.reduce<ReviewStats>((stats, review) => {
+          const current = stats[review.expert_id] ?? {
+            rating: 0,
+            reviewCount: 0,
+          };
+          const nextCount = current.reviewCount + 1;
+
+          stats[review.expert_id] = {
+            rating:
+              (current.rating * current.reviewCount + review.rating) / nextCount,
+            reviewCount: nextCount,
+          };
+
+          return stats;
+        }, {}) ?? {};
+
       if (isMounted) {
+        setReviewStats(nextReviewStats);
+
         if (data) {
           setExperts(data);
           return;
@@ -173,6 +206,7 @@ export default function HomePage() {
           .from("experts")
           .select("*")
           .eq("approved", true)
+          .eq("approval_status", "approved")
           .limit(3);
 
         setExperts(fallbackData || []);
@@ -187,28 +221,28 @@ export default function HomePage() {
   }, []);
 
   const featuredExperts = useMemo(
-    () => toLandingExperts(experts, fallbackExperts),
-    [experts, fallbackExperts]
+    () => toLandingExperts(experts, fallbackExperts, reviewStats),
+    [experts, fallbackExperts, reviewStats]
   );
 
   return (
     <main className="min-h-screen bg-[#F5F1E8] text-[#111111]">
-      <header className="mx-auto flex w-full max-w-7xl items-center justify-between gap-5 px-4 py-5 sm:px-6 lg:px-8">
+      <header className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-5 sm:flex-nowrap sm:px-6 lg:px-8">
         <Link href="/" className="text-2xl font-extrabold tracking-[0.16em] text-[#111111]">
           TRUPICK
         </Link>
         <AuthNav />
       </header>
 
-      <section className="mx-auto grid w-full max-w-7xl gap-10 px-4 pb-20 pt-8 sm:px-6 lg:grid-cols-[minmax(0,1fr)_440px] lg:px-8 lg:pb-28 lg:pt-16">
+      <section className="mx-auto grid w-full max-w-7xl gap-8 px-4 pb-14 pt-6 sm:px-6 lg:grid-cols-[minmax(0,1fr)_440px] lg:gap-10 lg:px-8 lg:pb-28 lg:pt-16">
         <div>
           <p className="text-sm font-black uppercase tracking-[0.22em] text-[#0f3d2e]">
             TRUSTED EXPERT NETWORK
           </p>
-          <h1 className="mt-5 max-w-3xl text-[56px] font-extrabold leading-[1.05] tracking-[-0.04em] text-[#111111] max-sm:text-[44px]">
+          <h1 className="mt-5 max-w-3xl text-[clamp(2.6rem,14vw,3.5rem)] font-extrabold leading-[1.05] tracking-normal text-[#111111] sm:tracking-[-0.04em]">
             Find the right expert.
           </h1>
-          <p className="mt-4 max-w-2xl text-[28px] font-extrabold leading-[1.18] tracking-[-0.03em] text-[#111111] max-sm:text-[24px]">
+          <p className="mt-4 max-w-2xl text-2xl font-extrabold leading-[1.18] tracking-normal text-[#111111] sm:text-[28px] sm:tracking-[-0.03em]">
             가장 적합한 전문가를 찾으세요.
           </p>
           <p className="mt-6 max-w-2xl whitespace-pre-line text-lg font-bold leading-8 text-[#4B5563] sm:text-xl">
@@ -216,22 +250,22 @@ export default function HomePage() {
 검증된 전문가를 거리와 평점 기준으로 탐색하세요.`}
           </p>
 
-          <div className="mt-9 flex flex-wrap gap-3">
+          <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
             <Link
               href="/experts"
-              className="rounded-full bg-[#0F5132] px-7 py-4 text-base font-black text-white shadow-[0_14px_40px_rgba(15,81,50,0.22)] transition hover:bg-[#146C43]"
+              className="rounded-full bg-[#0F5132] px-7 py-4 text-center text-base font-black text-white shadow-[0_14px_40px_rgba(15,81,50,0.22)] transition hover:bg-[#146C43]"
             >
               전문가 찾기
             </Link>
             <Link
               href="/register"
-              className="rounded-full border border-[#d9d2c6] bg-white px-7 py-4 text-base font-black text-[#111111] shadow-sm transition hover:border-[#111111]"
+              className="rounded-full border border-[#d9d2c6] bg-white px-7 py-4 text-center text-base font-black text-[#111111] shadow-sm transition hover:border-[#111111]"
             >
               전문가 등록
             </Link>
             <Link
               href="/beta"
-              className="rounded-full border border-[#111111] bg-[#111111] px-7 py-4 text-base font-black text-white shadow-sm transition hover:bg-[#333333]"
+              className="rounded-full border border-[#111111] bg-[#111111] px-7 py-4 text-center text-base font-black text-white shadow-sm transition hover:bg-[#333333]"
             >
               Beta Test 참여하기
             </Link>
@@ -243,7 +277,7 @@ export default function HomePage() {
             처음이신가요? TRUPICK 이용 흐름 보기
           </Link>
 
-          <div className="mt-10 grid max-w-xl grid-cols-3 gap-3">
+          <div className="mt-10 grid max-w-xl gap-3 sm:grid-cols-3">
             {proofItems.map((item) => (
               <div
                 key={item.label}
@@ -258,7 +292,7 @@ export default function HomePage() {
           </div>
         </div>
 
-        <div className="relative min-h-[520px] overflow-hidden rounded-[8px] border border-[#E5E7EB] bg-[#FFFFFF] shadow-[0_28px_90px_rgba(24,24,20,0.13)]">
+        <div className="relative min-h-[420px] overflow-hidden rounded-[8px] border border-[#E5E7EB] bg-[#FFFFFF] shadow-[0_28px_90px_rgba(24,24,20,0.13)] sm:min-h-[520px]">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_45%,rgba(255,255,255,0.95)_0%,rgba(242,239,230,0.92)_52%,rgba(225,219,207,0.98)_100%)]" />
           <div className="absolute left-1/2 top-1/2 h-24 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full border-[6px] border-white bg-[#ff5a5f] text-center text-sm font-black leading-[5.3rem] text-white shadow-[0_18px_50px_rgba(255,90,95,0.34)]">
             YOU
@@ -364,36 +398,44 @@ export default function HomePage() {
 
         <div className="grid gap-5 lg:grid-cols-3">
           {featuredExperts.map((expert) => (
-            <Link
+            <article
               key={expert.id}
-              href={expert.href}
               className="overflow-hidden rounded-[8px] border border-[#E5E7EB] bg-[#FFFFFF] shadow-[0_20px_65px_rgba(24,24,20,0.09)] transition hover:-translate-y-[4px]"
             >
-              <div className="relative h-72 bg-[#ebe7df]">
-                <Image
-                  src={expert.photoUrl}
-                  alt={expert.name}
-                  fill
-                  sizes="(max-width: 1024px) 100vw, 33vw"
-                  className="object-cover"
-                />
-                {expert.isPremium ? (
-                  <span className="absolute left-4 top-4 rounded-full bg-[#111111] px-4 py-2 text-xs font-black text-white">
-                    ✓ PREMIUM
-                  </span>
-                ) : null}
-              </div>
+              <Link href={expert.href} className="block">
+                <div className="relative h-72 bg-[#ebe7df]">
+                  <Image
+                    src={expert.photoUrl}
+                    alt={expert.name}
+                    fill
+                    sizes="(max-width: 1024px) 100vw, 33vw"
+                    className="object-cover"
+                  />
+                  {expert.isPremium ? (
+                    <span className="absolute left-4 top-4 rounded-full bg-[#111111] px-4 py-2 text-xs font-black text-white">
+                      ✓ PREMIUM
+                    </span>
+                  ) : null}
+                </div>
+              </Link>
               <div className="p-5">
                 <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h3 className="text-2xl font-bold text-[#111111]">{expert.name}</h3>
+                  <Link href={expert.href} className="min-w-0">
+                    <h3 className="text-2xl font-bold text-[#111111]">
+                      {expert.name}
+                    </h3>
                     <p className="mt-1 text-sm font-bold text-[#4B5563]">
                       {expert.profession}
                     </p>
+                  </Link>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className="rounded-full bg-[#f7f3ea] px-3 py-2 text-xs font-black">
+                      {expert.distance}
+                    </span>
+                    {expert.canFavorite ? (
+                      <FavoriteButton expertId={expert.id} size="compact" />
+                    ) : null}
                   </div>
-                  <span className="rounded-full bg-[#f7f3ea] px-3 py-2 text-xs font-black">
-                    {expert.distance}
-                  </span>
                 </div>
                 <div className="mt-5 flex flex-wrap gap-2 text-sm font-black">
                   <span className="rounded-full bg-[#e8f2ec] px-3 py-2 text-[#0f3d2e]">
@@ -407,7 +449,7 @@ export default function HomePage() {
                   </span>
                 </div>
               </div>
-            </Link>
+            </article>
           ))}
         </div>
       </section>
