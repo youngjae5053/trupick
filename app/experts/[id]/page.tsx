@@ -8,6 +8,10 @@ import ExpertReviewsSection, {
   ExpertReview,
 } from "@/app/components/ExpertReviewsSection";
 import FavoriteButton from "@/app/components/FavoriteButton";
+import {
+  ExpertQnaAccordion,
+  PreparedAlertButton,
+} from "@/app/components/VerifiedExpertProfileActions";
 import { getNearbyExperts } from "@/app/experts/expertDiscoveryData";
 import { getProfileCompleteness } from "@/app/profileCompleteness";
 
@@ -197,6 +201,74 @@ function Stars({ value = rating }: { value?: number }) {
   );
 }
 
+const verificationItems = [
+  {
+    title: "신원 인증 완료",
+    description: "실명 기반 계정과 연락 가능 정보를 확인했습니다.",
+  },
+  {
+    title: "경력 검증 완료",
+    description: "주요 경력과 활동 이력을 TRUPICK 기준으로 검토했습니다.",
+  },
+  {
+    title: "자격증 검증 완료",
+    description: "전문성을 보여주는 자격 정보와 면허 자료를 확인했습니다.",
+  },
+  {
+    title: "인터뷰 검증 완료",
+    description: "상담 방식, 전문 철학, 고객 응대 기준을 인터뷰로 점검했습니다.",
+  },
+  {
+    title: "사례 검증 완료",
+    description: "실제 상담 사례와 결과 중심의 개선 과정을 검토했습니다.",
+  },
+];
+
+const caseStudies = [
+  {
+    title: "어깨 통증 개선",
+    customer: "30대 남성",
+    period: "8주",
+    problem: "통증 NRS 8 → 2",
+    process: "견갑 안정화와 회전근개 강화 프로그램 진행",
+    result: "야간 통증 감소와 일상 움직임 회복",
+  },
+  {
+    title: "체형 교정",
+    customer: "20대 여성",
+    period: "10주",
+    problem: "라운드숄더와 골반 불균형",
+    process: "호흡 패턴, 흉추 가동성, 하체 정렬을 단계별로 교정",
+    result: "자세 유지 시간이 늘고 목·어깨 피로도가 감소",
+  },
+  {
+    title: "다이어트/체중 감량",
+    customer: "40대 직장인",
+    period: "12주",
+    problem: "체중 관리 실패와 낮은 운동 지속성",
+    process: "생활 패턴에 맞춘 주 3회 운동 루틴과 식습관 코칭",
+    result: "체지방률 개선과 지속 가능한 운동 습관 형성",
+  },
+];
+
+const qnaItems = [
+  {
+    question: "이 분야에서 가장 흔한 오해는 무엇인가요?",
+    answer:
+      "빠른 효과만 보고 무리하게 강도를 높이면 문제가 반복될 수 있습니다. 먼저 원인과 생활 패턴을 이해한 뒤 지속 가능한 계획을 세우는 것이 중요합니다.",
+  },
+  {
+    question: "초보자가 가장 먼저 알아야 할 것은 무엇인가요?",
+    answer:
+      "현재 상태를 정확히 아는 것이 출발점입니다. TRUPICK 검증 전문가는 상담 초기에 목표, 제약, 경험을 함께 정리해 현실적인 다음 단계를 제안합니다.",
+  },
+  {
+    question: "좋은 전문가를 고르는 기준은 무엇인가요?",
+    answer:
+      "경력과 자격뿐 아니라 설명 방식, 응답 속도, 실제 사례, 고객 후기까지 함께 보는 것이 좋습니다. 고객이 이해하고 선택할 수 있게 돕는 전문가를 추천합니다.",
+  },
+];
+
 async function getMockExpert(id: number): Promise<Expert | null> {
   const mockExpert = (await getNearbyExperts()).find((expert) => expert.id === id);
 
@@ -325,6 +397,18 @@ export default async function Page({
     sns_url: expert.sns_url,
     portfolio_url: expert.portfolio_url,
   });
+  const verificationScore = 93;
+  const responseRate = "98%";
+  const averageResponseTime = "1시간 이내";
+  const reviewTags = ["#전문성", "#친절함", "#빠른응답", "#결과만족"];
+  const recommendationReasons = [
+    "관련 사례 다수",
+    "높은 고객 만족도",
+    "빠른 응답률",
+    "검증 절차 통과",
+  ];
+  const philosophy =
+    "좋은 전문가는 단순히 문제를 해결하는 사람이 아니라, 고객이 스스로 이해하고 선택할 수 있게 돕는 사람이라고 생각합니다.";
 
   return (
     <main className="min-h-screen bg-[#F5F1E8] pb-28 text-[#111111]">
@@ -334,7 +418,7 @@ export default async function Page({
         category={category}
       />
 
-      <div className="mx-auto w-full max-w-6xl px-4 py-5 sm:px-6 lg:px-8">
+      <div className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
         <Link
           href="/experts"
           className="inline-flex rounded-full border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-extrabold text-[#0F5132] shadow-sm transition hover:border-[#111111]"
@@ -342,9 +426,9 @@ export default async function Page({
           전문가 목록으로
         </Link>
 
-        <section className="mt-5 overflow-hidden rounded-[8px] border border-[#E5E7EB] bg-white shadow-[0_24px_80px_rgba(24,24,20,0.10)]">
-          <div className="grid lg:grid-cols-[420px_minmax(0,1fr)]">
-            <div className="relative min-h-[340px] bg-[#E5E7EB] sm:min-h-[420px]">
+        <section className="mt-5 overflow-hidden rounded-[8px] border border-[#E5E7EB] bg-white shadow-[0_28px_90px_rgba(24,24,20,0.12)]">
+          <div className="grid lg:grid-cols-[440px_minmax(0,1fr)]">
+            <div className="relative min-h-[360px] bg-[#E5E7EB] sm:min-h-[500px]">
               <Image
                 src={expert.image_url || fallbackImage}
                 alt={expert.name}
@@ -358,8 +442,8 @@ export default async function Page({
 
             <div className="flex flex-col justify-center p-6 sm:p-8 lg:p-10">
               <div className="flex flex-wrap gap-2">
-                <span className="rounded-full bg-[#E8F2EC] px-4 py-2 text-xs font-black text-[#0F5132]">
-                  VERIFIED
+                <span className="rounded-full bg-[#0F5132] px-4 py-2 text-xs font-black text-white">
+                  TRUPICK VERIFIED
                 </span>
                 <span className="rounded-full bg-[#FFF1EC] px-4 py-2 text-xs font-black text-[#D65339]">
                   {category}
@@ -369,14 +453,12 @@ export default async function Page({
                     ✓ PREMIUM
                   </span>
                 ) : null}
-                {completeness.score >= 90 ? (
-                  <span className="rounded-full bg-[#E8F2EC] px-4 py-2 text-xs font-black text-[#0F5132]">
-                    COMPLETE PROFILE
-                  </span>
-                ) : null}
+                <span className="rounded-full bg-[#F4F7F1] px-4 py-2 text-xs font-black text-[#0F5132]">
+                  검증 점수 {verificationScore}점
+                </span>
               </div>
 
-              <h1 className="mt-6 text-[clamp(2.4rem,12vw,4.8rem)] font-black leading-[0.98] tracking-normal text-[#111111] sm:tracking-[-0.04em]">
+              <h1 className="mt-7 text-[clamp(2.5rem,11vw,5rem)] font-black leading-[0.98] tracking-normal text-[#111111] sm:tracking-[-0.04em]">
                 {expert.name}
               </h1>
               <p className="mt-4 text-xl font-black leading-8 text-[#111111]">
@@ -384,6 +466,9 @@ export default async function Page({
               </p>
               <p className="mt-2 text-base font-bold leading-7 text-[#4B5563] sm:text-lg">
                 {oneLineIntro}
+              </p>
+              <p className="mt-4 text-base font-extrabold text-[#111111]">
+                {expert.location}
               </p>
 
               {expert.plan_type === "premium" ? (
@@ -397,13 +482,21 @@ export default async function Page({
                 </div>
               ) : null}
 
-              <div className="mt-7 grid gap-3 sm:grid-cols-3">
+              <div className="mt-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 <div className="rounded-[8px] bg-[#FBFAF7] p-4">
                   <p className="text-xs font-black uppercase tracking-[0.14em] text-[#6B7280]">
                     Rating
                   </p>
                   <p className="mt-2 text-xl font-black text-[#111111]">
                     ⭐ {expertRating.toFixed(2)}
+                  </p>
+                </div>
+                <div className="rounded-[8px] bg-[#FBFAF7] p-4">
+                  <p className="text-xs font-black uppercase tracking-[0.14em] text-[#6B7280]">
+                    Reviews
+                  </p>
+                  <p className="mt-2 text-xl font-black text-[#111111]">
+                    리뷰 {expertReviewCount}개
                   </p>
                 </div>
                 <div className="rounded-[8px] bg-[#FBFAF7] p-4">
@@ -422,17 +515,69 @@ export default async function Page({
                     {distanceLabel}
                   </p>
                 </div>
+                <div className="rounded-[8px] bg-[#FBFAF7] p-4">
+                  <p className="text-xs font-black uppercase tracking-[0.14em] text-[#6B7280]">
+                    Response Rate
+                  </p>
+                  <p className="mt-2 text-xl font-black text-[#111111]">
+                    {responseRate}
+                  </p>
+                </div>
+                <div className="rounded-[8px] bg-[#FBFAF7] p-4">
+                  <p className="text-xs font-black uppercase tracking-[0.14em] text-[#6B7280]">
+                    Response Time
+                  </p>
+                  <p className="mt-2 text-xl font-black text-[#111111]">
+                    {averageResponseTime}
+                  </p>
+                </div>
               </div>
-
-              <p className="mt-5 text-base font-extrabold text-[#111111]">
-                {expert.location}
-              </p>
             </div>
           </div>
         </section>
 
-        <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
+        <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
           <div className="grid gap-6">
+            <section className="rounded-[8px] border border-[#E5E7EB] bg-white p-6 shadow-sm sm:p-8">
+              <p className="text-sm font-black uppercase tracking-[0.18em] text-[#0F5132]">
+                TRUPICK Verification
+              </p>
+              <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <h2 className="text-3xl font-black text-[#111111]">
+                    왜 검증된 전문가인가요?
+                  </h2>
+                  <p className="mt-3 max-w-2xl text-base font-bold leading-8 text-[#374151]">
+                    TRUPICK은 신원, 경력, 자격, 인터뷰, 실제 사례를 함께 확인해 고객이 더 안심하고 전문가를 선택할 수 있도록 검증합니다.
+                  </p>
+                </div>
+                <div className="rounded-[8px] bg-[#0F5132] px-5 py-4 text-white">
+                  <p className="text-xs font-black uppercase tracking-[0.16em]">
+                    Verification Score
+                  </p>
+                  <p className="mt-2 text-4xl font-black">{verificationScore}점</p>
+                </div>
+              </div>
+              <div className="mt-7 grid gap-3 md:grid-cols-2">
+                {verificationItems.map((item) => (
+                  <article
+                    key={item.title}
+                    className="rounded-[8px] border border-[#E5E7EB] bg-[#FBFAF7] p-5"
+                  >
+                    <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#0F5132] text-base font-black text-white">
+                      ✓
+                    </span>
+                    <h3 className="mt-4 text-lg font-black text-[#111111]">
+                      {item.title}
+                    </h3>
+                    <p className="mt-2 text-sm font-bold leading-7 text-[#374151]">
+                      {item.description}
+                    </p>
+                  </article>
+                ))}
+              </div>
+            </section>
+
             <section className="rounded-[8px] border border-[#E5E7EB] bg-white p-6 shadow-sm sm:p-8">
               <p className="text-sm font-black uppercase tracking-[0.18em] text-[#0F5132]">
                 Specialty
@@ -454,39 +599,104 @@ export default async function Page({
 
             <section className="rounded-[8px] border border-[#E5E7EB] bg-white p-6 shadow-sm sm:p-8">
               <p className="text-sm font-black uppercase tracking-[0.18em] text-[#0F5132]">
-                About
+                Expert Philosophy
               </p>
-              <h2 className="mt-3 text-3xl font-black text-[#111111]">
-                상세 소개
-              </h2>
+              <blockquote className="mt-4 rounded-[8px] bg-[#FBFAF7] p-6 text-xl font-black leading-9 text-[#111111] sm:text-2xl sm:leading-10">
+                “{philosophy}”
+              </blockquote>
               <p className="mt-5 text-base font-bold leading-8 text-[#374151]">
                 {expert.description}
               </p>
-              <div className="mt-6 grid gap-3 sm:grid-cols-3">
-                <div className="rounded-[8px] bg-[#FBFAF7] p-4">
-                  <p className="text-xs font-black uppercase tracking-[0.12em] text-[#6B7280]">
-                    Category
-                  </p>
-                  <p className="mt-2 text-sm font-black text-[#111111]">
-                    {category}
-                  </p>
+            </section>
+
+            <section className="rounded-[8px] border border-[#E5E7EB] bg-white p-6 shadow-sm sm:p-8">
+              <p className="text-sm font-black uppercase tracking-[0.18em] text-[#0F5132]">
+                TRUPICK Interview
+              </p>
+              <h2 className="mt-3 text-3xl font-black text-[#111111]">
+                인터뷰로 확인한 상담 방식
+              </h2>
+              <div className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
+                <div className="relative min-h-[260px] overflow-hidden rounded-[8px] bg-[#111111]">
+                  <Image
+                    src={expert.image_url || fallbackImage}
+                    alt={`${expert.name} 인터뷰 썸네일`}
+                    fill
+                    unoptimized
+                    sizes="(max-width: 1024px) 100vw, 640px"
+                    className="object-cover opacity-70"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+                  <div className="absolute inset-x-0 bottom-0 p-6 text-white">
+                    <span className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-2xl font-black text-[#111111]">
+                      ▶
+                    </span>
+                    <h3 className="mt-5 text-2xl font-black">3분 인터뷰 보기</h3>
+                    <p className="mt-2 text-sm font-bold leading-6 text-white">
+                      전문가의 철학과 실제 상담 방식을 짧은 인터뷰로 확인합니다.
+                    </p>
+                  </div>
                 </div>
-                <div className="rounded-[8px] bg-[#FBFAF7] p-4">
-                  <p className="text-xs font-black uppercase tracking-[0.12em] text-[#6B7280]">
-                    Reviews
+                <div className="rounded-[8px] bg-[#FBFAF7] p-5">
+                  <p className="text-sm font-black text-[#111111]">
+                    질문 미리보기
                   </p>
-                  <p className="mt-2 text-sm font-black text-[#111111]">
-                    {expertReviewCount}개 후기
-                  </p>
+                  <ul className="mt-4 grid gap-3 text-sm font-bold leading-7 text-[#374151]">
+                    <li>어떤 고객을 가장 많이 도와왔나요?</li>
+                    <li>가장 자신 있는 전문 분야는 무엇인가요?</li>
+                    <li>고객이 자주 하는 실수는 무엇인가요?</li>
+                  </ul>
+                  <PreparedAlertButton
+                    message="인터뷰 영상은 준비 중입니다."
+                    className="mt-5 w-full rounded-full bg-[#111111] px-5 py-3 text-sm font-black text-white transition hover:bg-[#0F5132]"
+                  >
+                    인터뷰 보기
+                  </PreparedAlertButton>
                 </div>
-                <div className="rounded-[8px] bg-[#FBFAF7] p-4">
-                  <p className="text-xs font-black uppercase tracking-[0.12em] text-[#6B7280]">
-                    Location
-                  </p>
-                  <p className="mt-2 text-sm font-black text-[#111111]">
-                    {expert.location}
-                  </p>
-                </div>
+              </div>
+            </section>
+
+            <section className="rounded-[8px] border border-[#E5E7EB] bg-white p-6 shadow-sm sm:p-8">
+              <p className="text-sm font-black uppercase tracking-[0.18em] text-[#0F5132]">
+                Verified Cases
+              </p>
+              <h2 className="mt-3 text-3xl font-black text-[#111111]">
+                검증된 사례
+              </h2>
+              <div className="mt-6 grid gap-4 lg:grid-cols-3">
+                {caseStudies.map((caseStudy) => (
+                  <article
+                    key={caseStudy.title}
+                    className="flex min-h-full flex-col rounded-[8px] border border-[#E5E7EB] bg-[#FBFAF7] p-5"
+                  >
+                    <h3 className="text-xl font-black text-[#111111]">
+                      {caseStudy.title}
+                    </h3>
+                    <p className="mt-2 text-sm font-black text-[#0F5132]">
+                      {caseStudy.customer} · {caseStudy.period}
+                    </p>
+                    <div className="mt-5 grid gap-3 text-sm font-bold leading-7 text-[#374151]">
+                      <p>
+                        <span className="font-black text-[#111111]">문제</span>{" "}
+                        {caseStudy.problem}
+                      </p>
+                      <p>
+                        <span className="font-black text-[#111111]">과정</span>{" "}
+                        {caseStudy.process}
+                      </p>
+                      <p>
+                        <span className="font-black text-[#111111]">결과</span>{" "}
+                        {caseStudy.result}
+                      </p>
+                    </div>
+                    <PreparedAlertButton
+                      message="사례 상세 리포트는 준비 중입니다."
+                      className="mt-6 w-full rounded-full border border-[#111111] bg-white px-5 py-3 text-sm font-black text-[#111111] transition hover:bg-[#111111] hover:text-white"
+                    >
+                      자세히 보기
+                    </PreparedAlertButton>
+                  </article>
+                ))}
               </div>
             </section>
 
@@ -536,11 +746,64 @@ export default async function Page({
               </ol>
             </section>
 
+            <section className="rounded-[8px] border border-[#E5E7EB] bg-white p-6 shadow-sm sm:p-8">
+              <p className="text-sm font-black uppercase tracking-[0.18em] text-[#0F5132]">
+                Expert Q&A
+              </p>
+              <h2 className="mt-3 text-3xl font-black text-[#111111]">
+                전문가에게 자주 묻는 질문
+              </h2>
+              <ExpertQnaAccordion items={qnaItems} />
+            </section>
+
+            <section className="rounded-[8px] border border-[#E5E7EB] bg-white p-6 shadow-sm sm:p-8">
+              <p className="text-sm font-black uppercase tracking-[0.18em] text-[#0F5132]">
+                Review Tags
+              </p>
+              <h2 className="mt-3 text-3xl font-black text-[#111111]">
+                후기 키워드
+              </h2>
+              <div className="mt-5 flex flex-wrap gap-2">
+                {reviewTags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="rounded-full bg-[#E8F2EC] px-4 py-2 text-sm font-black text-[#0F5132]"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </section>
+
             <ExpertReviewsSection
               expertId={expert.id}
               expertName={expert.name}
               initialReviews={reviews}
             />
+
+            <section className="rounded-[8px] border border-[#E5E7EB] bg-white p-6 shadow-sm sm:p-8">
+              <p className="text-sm font-black uppercase tracking-[0.18em] text-[#0F5132]">
+                Why TRUPICK Recommends This Expert
+              </p>
+              <h2 className="mt-3 text-3xl font-black text-[#111111]">
+                TRUPICK 추천 이유
+              </h2>
+              <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                {recommendationReasons.map((reason) => (
+                  <article
+                    key={reason}
+                    className="rounded-[8px] border border-[#E5E7EB] bg-[#FBFAF7] p-5"
+                  >
+                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#111111] text-sm font-black text-white">
+                      ✓
+                    </span>
+                    <h3 className="mt-4 text-lg font-black text-[#111111]">
+                      {reason}
+                    </h3>
+                  </article>
+                ))}
+              </div>
+            </section>
           </div>
 
           <aside className="hidden lg:sticky lg:top-6 lg:block">
@@ -578,6 +841,16 @@ export default async function Page({
                 </p>
               </div>
 
+              <div className="mt-4 rounded-[8px] bg-[#0F5132] p-4 text-white">
+                <p className="text-xs font-black uppercase tracking-[0.14em]">
+                  TRUPICK VERIFIED
+                </p>
+                <p className="mt-2 text-3xl font-black">{verificationScore}점</p>
+                <p className="mt-2 text-sm font-bold leading-6">
+                  응답률 {responseRate} · 평균 {averageResponseTime}
+                </p>
+              </div>
+
               <div className="mt-4 rounded-[8px] bg-[#FBFAF7] p-4">
                 <div className="flex items-end justify-between gap-3">
                   <div>
@@ -603,23 +876,26 @@ export default async function Page({
                 )}
               </div>
 
-              <div className="mt-5">
+              <div className="mt-5 grid gap-3">
                 <ConsultationRequestFlow
                   expertId={expert.id}
                   expertName={expert.name}
                   triggerClassName="block w-full rounded-full bg-[#0F5132] px-5 py-4 text-center text-sm font-black text-white transition hover:bg-[#146C43]"
                 />
-              </div>
-
-              <div className="mt-3">
                 <FavoriteButton expertId={expert.id} />
+                <PreparedAlertButton
+                  message="인터뷰 영상은 준비 중입니다."
+                  className="w-full rounded-full border border-[#111111] bg-white px-5 py-4 text-center text-sm font-black text-[#111111] transition hover:bg-[#111111] hover:text-white"
+                >
+                  인터뷰 보기
+                </PreparedAlertButton>
               </div>
             </div>
           </aside>
         </div>
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[#E5E7EB] bg-white/95 px-4 py-3 shadow-[0_-18px_55px_rgba(24,24,20,0.12)] backdrop-blur">
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[#E5E7EB] bg-white/95 px-4 py-3 shadow-[0_-18px_55px_rgba(24,24,20,0.12)] backdrop-blur lg:hidden">
         <div className="mx-auto flex w-full max-w-6xl items-center gap-3">
           <div className="hidden min-w-0 flex-1 sm:block">
             <p className="truncate text-sm font-black text-[#111111]">
@@ -630,12 +906,21 @@ export default async function Page({
               {distanceLabel}
             </p>
           </div>
-          <div className="w-full sm:w-auto sm:min-w-[260px]">
-            <ConsultationRequestFlow
-              expertId={expert.id}
-              expertName={expert.name}
-              triggerClassName="block w-full rounded-full bg-[#0F5132] px-6 py-4 text-center text-sm font-black text-white transition hover:bg-[#146C43]"
-            />
+          <div className="flex w-full items-center gap-2 sm:w-auto">
+            <div className="min-w-0 flex-1 sm:min-w-[260px]">
+              <ConsultationRequestFlow
+                expertId={expert.id}
+                expertName={expert.name}
+                triggerClassName="block w-full rounded-full bg-[#0F5132] px-6 py-4 text-center text-sm font-black text-white transition hover:bg-[#146C43]"
+              />
+            </div>
+            <FavoriteButton expertId={expert.id} size="compact" />
+            <PreparedAlertButton
+              message="인터뷰 영상은 준비 중입니다."
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#D9CFBF] bg-white text-sm font-black text-[#111111] transition hover:border-[#111111]"
+            >
+              ▶
+            </PreparedAlertButton>
           </div>
         </div>
       </div>

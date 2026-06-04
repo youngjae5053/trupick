@@ -47,19 +47,20 @@ const proofItems = [
 
 const whyItems = [
   {
-    icon: "V",
-    title: "검증",
-    description: "승인된 전문가만 노출",
+    icon: "VE",
+    title: "Verified Experts",
+    description:
+      "경력, 자격, 인터뷰, 실제 사례를 검토한 전문가만 소개합니다.",
   },
   {
-    icon: "D",
-    title: "거리 기반 탐색",
-    description: "가까운 전문가를 우선 추천",
+    icon: "IN",
+    title: "Interview Based",
+    description: "전문가의 철학과 문제 해결 방식을 인터뷰로 확인합니다.",
   },
   {
-    icon: "AI",
-    title: "AI 추천",
-    description: "사용자 상황에 맞는 전문가 추천",
+    icon: "RC",
+    title: "Real Cases",
+    description: "실제 사례와 후기를 통해 전문성을 확인할 수 있습니다.",
   },
 ];
 
@@ -240,14 +241,10 @@ export default function HomePage() {
             TRUSTED EXPERT NETWORK
           </p>
           <h1 className="mt-5 max-w-3xl text-[clamp(2.6rem,14vw,3.5rem)] font-extrabold leading-[1.05] tracking-normal text-[#111111] sm:tracking-[-0.04em]">
-            Find the right expert.
+            검증된 전문가를 찾는 가장 쉬운 방법
           </h1>
-          <p className="mt-4 max-w-2xl text-2xl font-extrabold leading-[1.18] tracking-normal text-[#111111] sm:text-[28px] sm:tracking-[-0.03em]">
-            가장 적합한 전문가를 찾으세요.
-          </p>
-          <p className="mt-6 max-w-2xl whitespace-pre-line text-lg font-bold leading-8 text-[#4B5563] sm:text-xl">
-            {`운동·재활, 세무, 법률, 디자인, 마케팅까지
-검증된 전문가를 거리와 평점 기준으로 탐색하세요.`}
+          <p className="mt-6 max-w-2xl text-lg font-bold leading-8 text-[#4B5563] sm:text-xl">
+            TRUPICK은 경력, 자격, 인터뷰, 실제 사례를 바탕으로 전문가를 선별합니다.
           </p>
 
           <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
@@ -346,6 +343,49 @@ export default function HomePage() {
               </Link>
             );
           })}
+        </div>
+      </section>
+
+      <section className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
+        <div className="rounded-[8px] border border-[#E5E7EB] bg-white p-6 shadow-[0_24px_70px_rgba(24,24,20,0.08)] sm:p-8 lg:p-10">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p className="text-sm font-black uppercase tracking-[0.18em] text-[#0F5132]">
+                Why TRUPICK
+              </p>
+              <h2 className="mt-3 text-3xl font-black leading-tight text-[#111111] sm:text-4xl">
+                검증된 전문가 플랫폼이어야 하는 이유
+              </h2>
+              <p className="mt-4 max-w-3xl text-base font-bold leading-8 text-[#374151]">
+                프로필만 보고 선택하기 어려운 전문가 서비스를 TRUPICK의 검증 기준으로 더 명확하게 비교하세요.
+              </p>
+            </div>
+            <Link
+              href="/how-we-verify"
+              className="rounded-full bg-[#0F5132] px-6 py-4 text-center text-sm font-black text-white shadow-[0_14px_40px_rgba(15,81,50,0.18)] transition hover:bg-[#146C43]"
+            >
+              TRUPICK 검증 기준 보기
+            </Link>
+          </div>
+
+          <div className="mt-8 grid gap-4 md:grid-cols-3">
+            {whyItems.map((item) => (
+              <article
+                key={item.title}
+                className="rounded-[8px] border border-[#E5E7EB] bg-[#FBFAF7] p-5 transition hover:-translate-y-[4px] hover:border-[#111111]"
+              >
+                <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[#111111] text-xs font-black text-white">
+                  {item.icon}
+                </span>
+                <h3 className="mt-5 text-2xl font-black text-[#111111]">
+                  {item.title}
+                </h3>
+                <p className="mt-3 text-sm font-bold leading-7 text-[#374151]">
+                  {item.description}
+                </p>
+              </article>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -455,28 +495,6 @@ export default function HomePage() {
       </section>
 
       <section className="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-        <div className="rounded-[8px] bg-[#111111] p-6 text-white sm:p-10">
-          <p className="text-sm font-black uppercase tracking-[0.18em] text-white/55">
-            Why TRUPICK
-          </p>
-          <h2 className="mt-3 text-4xl font-black text-white">왜 TRUPICK인가?</h2>
-          <div className="mt-8 grid gap-4 md:grid-cols-3">
-            {whyItems.map((item) => (
-              <div key={item.title} className="rounded-[8px] bg-white/8 p-5">
-                <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-sm font-black text-[#111111]">
-                  {item.icon}
-                </span>
-                <h3 className="mt-5 text-2xl font-black">{item.title}</h3>
-                <p className="mt-2 text-sm font-bold leading-6 text-white/68">
-                  {item.description}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
         <p className="text-sm font-black uppercase tracking-[0.18em] text-[#0f3d2e]">
           How it works
         </p>
@@ -537,6 +555,7 @@ export default function HomePage() {
             <Link href="/">회사 소개</Link>
             <Link href="/">이용약관</Link>
             <Link href="/">개인정보처리방침</Link>
+            <Link href="/how-we-verify">검증 기준</Link>
             <Link href="/beta">Beta Test</Link>
             <Link href="/feedback">피드백</Link>
             <Link href="/request">문의하기</Link>

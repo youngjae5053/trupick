@@ -90,6 +90,13 @@ export default function AuthNav() {
 
   return (
     <nav className="flex w-full flex-wrap items-center justify-start gap-2 text-sm sm:w-auto sm:justify-end sm:gap-4">
+      <Link
+        href="/how-we-verify"
+        style={secondaryMobileLinkStyle}
+        className="hidden sm:inline"
+      >
+        검증 기준
+      </Link>
       <Link href="/beta" style={secondaryMobileLinkStyle} className="hidden sm:inline">
         Beta Test
       </Link>
