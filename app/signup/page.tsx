@@ -70,7 +70,7 @@ export default function SignupPage() {
     const supabase = getSupabaseBrowserClient();
 
     if (!supabase) {
-      setErrorMessage("서비스 연결 설정을 확인하는 중입니다. 잠시 후 다시 시도해주세요.");
+      setErrorMessage("Supabase 환경 변수를 확인해주세요.");
       return;
     }
 
