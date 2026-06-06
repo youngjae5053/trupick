@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import type { Provider } from "@supabase/supabase-js";
 import { getSupabaseBrowserClient } from "@/app/supabaseBrowser";
 
-type SocialProvider = "google" | "kakao" | "naver";
+type SocialProvider = Extract<Provider, "google" | "kakao"> | "naver";
 
 const socialButtons: Array<{
   provider: SocialProvider;
@@ -41,39 +42,31 @@ export default function SocialAuthButtons({
     null
   );
 
-  const handleGoogleLogin = async () => {
+  const handleSocialAuth = async (provider: SocialProvider) => {
+    setMessage("");
+    setLoadingProvider(provider);
+
     const supabase = getSupabaseBrowserClient();
 
     if (!supabase) {
       alert("Supabase 설정을 확인해주세요.");
+      setLoadingProvider(null);
       return;
     }
 
     const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
+      provider: provider as Provider,
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
       },
     });
 
+    setLoadingProvider(null);
+
     if (error) {
-      alert(error.message);
+      setMessage(error.message);
     }
   };
-
-  async function handleSocialAuth(provider: SocialProvider) {
-    setMessage("");
-    setLoadingProvider(provider);
-
-    if (provider === "google") {
-      await handleGoogleLogin();
-      setLoadingProvider(null);
-      return;
-    }
-
-    setLoadingProvider(null);
-    setMessage("소셜 로그인 설정 준비 중입니다.");
-  }
 
   return (
     <section className="mt-7">
