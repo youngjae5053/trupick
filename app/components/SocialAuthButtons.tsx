@@ -46,30 +46,34 @@ export default function SocialAuthButtons({
     setMessage("");
     setLoadingProvider(provider);
 
-    const supabase = getSupabaseBrowserClient();
+    try {
+      const supabase = getSupabaseBrowserClient();
 
-    if (!supabase) {
-      const error = {
-        message: "Supabase client is not configured",
-        provider,
-      };
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: provider as Provider,
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
 
+      if (error) {
+        console.error(error);
+        setMessage(JSON.stringify(error));
+        setLoadingProvider(null);
+      }
+    } catch (error) {
       console.error(error);
-      setMessage(JSON.stringify(error));
-      setLoadingProvider(null);
-      return;
-    }
 
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: provider as Provider,
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
-
-    if (error) {
-      console.error(error);
-      setMessage(JSON.stringify(error));
+      setMessage(
+        JSON.stringify(
+          error instanceof Error
+            ? {
+                message: error.message,
+                provider,
+              }
+            : error
+        )
+      );
       setLoadingProvider(null);
     }
   };
