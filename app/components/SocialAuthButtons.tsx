@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { Provider } from "@supabase/supabase-js";
 import { getSupabaseBrowserClient } from "@/app/supabaseBrowser";
 
-type SocialProvider = Extract<Provider, "google" | "kakao"> | "naver";
+type SocialProvider = "google" | "kakao" | "naver";
 
 const socialButtons: Array<{
   provider: SocialProvider;
@@ -49,7 +49,8 @@ export default function SocialAuthButtons({
     const supabase = getSupabaseBrowserClient();
 
     if (!supabase) {
-      alert("Supabase 설정을 확인해주세요.");
+      console.error(`${provider} OAuth error`, "Supabase client is not configured");
+      setMessage("OAuth 로그인을 시작하지 못했습니다.");
       setLoadingProvider(null);
       return;
     }
@@ -61,10 +62,10 @@ export default function SocialAuthButtons({
       },
     });
 
-    setLoadingProvider(null);
-
     if (error) {
+      console.error(`${provider} OAuth error`, error);
       setMessage(error.message);
+      setLoadingProvider(null);
     }
   };
 
