@@ -49,8 +49,13 @@ export default function SocialAuthButtons({
     const supabase = getSupabaseBrowserClient();
 
     if (!supabase) {
-      console.error(`${provider} OAuth error`, "Supabase client is not configured");
-      setMessage("OAuth 로그인을 시작하지 못했습니다.");
+      const error = {
+        message: "Supabase client is not configured",
+        provider,
+      };
+
+      console.error(error);
+      setMessage(JSON.stringify(error));
       setLoadingProvider(null);
       return;
     }
@@ -63,8 +68,8 @@ export default function SocialAuthButtons({
     });
 
     if (error) {
-      console.error(`${provider} OAuth error`, error);
-      setMessage(error.message);
+      console.error(error);
+      setMessage(JSON.stringify(error));
       setLoadingProvider(null);
     }
   };
