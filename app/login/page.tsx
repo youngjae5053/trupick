@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { trackAnalyticsEvent } from "@/app/analytics";
 import { getFriendlyErrorMessage } from "@/app/errorMessages";
+import SocialAuthButtons from "@/app/components/SocialAuthButtons";
 import { getSupabaseBrowserClient } from "@/app/supabaseBrowser";
 
 type UserRole = "customer" | "expert" | "admin";
@@ -12,6 +13,10 @@ type UserRole = "customer" | "expert" | "admin";
 const introItems = ["검증된 전문가", "안전한 상담", "맞춤 추천"];
 
 function getRoleDestination(role: UserRole | null) {
+  if (!role) {
+    return "/onboarding";
+  }
+
   if (role === "admin") {
     return "/admin/experts";
   }
@@ -142,6 +147,8 @@ export default function LoginPage() {
           <p className="mt-3 text-base font-bold leading-7 text-[#374151]">
             검증된 전문가와 연결되는 가장 쉬운 방법
           </p>
+
+          <SocialAuthButtons mode="login" />
 
           <form onSubmit={handleSubmit} className="mt-8 grid gap-5">
             <div>

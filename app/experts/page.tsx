@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import {
   ExpertDiscoveryProfile,
   getNearbyExperts,
@@ -11,15 +11,13 @@ import {
 } from "./expertDiscoveryData";
 import {
   ExpertCategory,
-  expertCategories,
-  expertCategoryLabels,
-  getCategoryHref,
   isExpertCategory,
 } from "@/app/expertCategories";
 import { trackAnalyticsEvent } from "@/app/analytics";
 import { getSupabaseBrowserClient } from "@/app/supabaseBrowser";
 import { getProfileCompleteness } from "@/app/profileCompleteness";
 import FavoriteButton from "@/app/components/FavoriteButton";
+import KakaoExpertMap from "@/app/components/KakaoExpertMap";
 
 type ApprovedExpertRow = {
   id: number;
@@ -39,19 +37,30 @@ const distanceRings = [
   { label: "5km", meters: 5000 },
 ];
 
+const mapDistanceFilters = [
+  { label: "1km 이내", meters: 1000 },
+  { label: "3km 이내", meters: 3000 },
+  { label: "5km 이내", meters: 5000 },
+  { label: "10km 이내", meters: 10000 },
+];
+
 const maxRadarDistance = 5000;
-const allCategoryLabels = expertCategoryLabels;
+const fitnessCategory: ExpertCategory = "운동/재활";
 
 const subcategoryFilters: Record<ExpertCategory, string[]> = {
   "운동/재활": [
     "전체",
-    "PT/퍼스널트레이닝",
     "재활운동",
-    "체형교정",
-    "필라테스",
-    "스트레칭",
     "통증관리",
-    "기능회복",
+    "체형교정",
+    "다이어트",
+    "근력향상",
+    "파워리프팅",
+    "필라테스",
+    "러닝",
+    "시니어 운동",
+    "산전산후 운동",
+    "스포츠 퍼포먼스",
   ],
   세무: [
     "전체",
@@ -114,6 +123,13 @@ const subcategoryFilters: Record<ExpertCategory, string[]> = {
 const subcategoryKeywords: Record<string, string[]> = {
   "PT/퍼스널트레이닝": ["PT", "퍼스널", "트레이닝", "근력", "운동"],
   재활운동: ["재활", "회복", "운동"],
+  다이어트: ["다이어트", "체중", "감량", "체지방"],
+  근력향상: ["근력", "근비대", "웨이트", "트레이닝"],
+  파워리프팅: ["파워리프팅", "스쿼트", "데드리프트", "벤치프레스"],
+  러닝: ["러닝", "달리기", "마라톤", "주법"],
+  "시니어 운동": ["시니어", "고령", "낙상", "기능회복"],
+  "산전산후 운동": ["산전", "산후", "임산부", "골반"],
+  "스포츠 퍼포먼스": ["스포츠", "퍼포먼스", "선수", "민첩"],
   체형교정: ["체형", "교정", "자세", "정렬"],
   필라테스: ["필라테스", "코어", "호흡"],
   스트레칭: ["스트레칭", "가동성", "유연성"],
@@ -164,6 +180,16 @@ function formatDistance(meters: number) {
   }
 
   return `${(meters / 1000).toFixed(meters % 1000 === 0 ? 0 : 1)}km`;
+}
+
+function formatConsultationMethods(methods: string[]) {
+  const labels: Record<string, string> = {
+    Visit: "방문",
+    Online: "온라인",
+    Center: "센터",
+  };
+
+  return methods.map((method) => labels[method] ?? method).join(" / ");
 }
 
 function getMarkerPosition(expert: ExpertDiscoveryProfile) {
@@ -249,6 +275,27 @@ function deriveCategory(specialty: string): ExpertCategory {
   return "디자인";
 }
 
+function isFitnessExpert(expert: ExpertDiscoveryProfile) {
+  const text = [
+    expert.nickname,
+    expert.profession,
+    expert.category,
+    expert.description,
+    expert.career,
+    ...expert.specialtyTags,
+  ].join(" ");
+
+  return (
+    expert.category === fitnessCategory ||
+    text.includes("운동") ||
+    text.includes("재활") ||
+    text.includes("트레이너") ||
+    text.includes("필라테스") ||
+    text.includes("통증") ||
+    text.includes("체형")
+  );
+}
+
 function mapApprovedExperts(
   rows: ApprovedExpertRow[],
   fallbackExperts: ExpertDiscoveryProfile[],
@@ -295,19 +342,24 @@ function ExpertsDiscoveryContent({
   initialCategory: ExpertCategory | null;
 }) {
   const [experts, setExperts] = useState<ExpertDiscoveryProfile[]>([]);
-  const [activeCategory] = useState<ExpertCategory | null>(initialCategory);
+  const [activeCategory] = useState<ExpertCategory>(
+    initialCategory === fitnessCategory ? initialCategory : fitnessCategory
+  );
   const [activeSubcategory, setActiveSubcategory] = useState("전체");
   const [selectedExpertId, setSelectedExpertId] = useState<number | null>(null);
   const [locationLabel, setLocationLabel] = useState(mockUserLocation.label);
+  const [locationSearch, setLocationSearch] = useState("");
   const [search, setSearch] = useState("");
+  const [maxDistanceFilter, setMaxDistanceFilter] = useState(10_000);
 
   useEffect(() => {
     let isMounted = true;
 
     async function loadExperts() {
       const fallbackExperts = await getNearbyExperts();
+      const fitnessFallbackExperts = fallbackExperts.filter(isFitnessExpert);
       const supabase = getSupabaseBrowserClient();
-      let data = fallbackExperts;
+      let data = fitnessFallbackExperts;
 
       if (supabase) {
         const { data: approvedRows, error } = await supabase
@@ -347,13 +399,25 @@ function ExpertsDiscoveryContent({
             .eq("approval_status", "approved");
 
           data = fallbackRows
-            ? mapApprovedExperts(fallbackRows, fallbackExperts, reviewStats)
+            ? mapApprovedExperts(
+                fallbackRows,
+                fitnessFallbackExperts,
+                reviewStats
+              ).filter(isFitnessExpert)
             : [];
         } else {
           data = approvedRows
-            ? mapApprovedExperts(approvedRows, fallbackExperts, reviewStats)
+            ? mapApprovedExperts(
+                approvedRows,
+                fitnessFallbackExperts,
+                reviewStats
+              ).filter(isFitnessExpert)
             : [];
         }
+      }
+
+      if (data.length === 0) {
+        data = fitnessFallbackExperts;
       }
 
       if (isMounted) {
@@ -373,11 +437,9 @@ function ExpertsDiscoveryContent({
     () => {
       const matchingExperts = experts.filter((expert) => {
         const keyword = search.trim().toLowerCase();
-        const matchesCategory = activeCategory
-          ? expert.category === activeCategory
-          : allCategoryLabels.includes(expert.category);
-        const matchesDetail =
-          !activeCategory || matchesSubcategory(expert, activeSubcategory);
+        const matchesCategory = isFitnessExpert(expert);
+        const matchesDetail = matchesSubcategory(expert, activeSubcategory);
+        const matchesDistance = expert.distanceMeters <= maxDistanceFilter;
         const matchesSearch =
           keyword.length === 0 ||
           expert.nickname.toLowerCase().includes(keyword) ||
@@ -386,12 +448,12 @@ function ExpertsDiscoveryContent({
           expert.description.toLowerCase().includes(keyword) ||
           expert.location.toLowerCase().includes(keyword);
 
-        return matchesCategory && matchesDetail && matchesSearch;
+        return matchesCategory && matchesDetail && matchesDistance && matchesSearch;
       });
 
       return sortPremiumFirst(matchingExperts);
     },
-    [activeCategory, activeSubcategory, experts, search]
+    [activeSubcategory, experts, maxDistanceFilter, search]
   );
   const selectedExpert =
     filteredExperts.find((expert) => expert.id === selectedExpertId) ??
@@ -410,7 +472,18 @@ function ExpertsDiscoveryContent({
     );
   }
 
-  function selectExpert(expert: ExpertDiscoveryProfile) {
+  function applyLocationSearch() {
+    const nextLocation = locationSearch.trim();
+
+    if (!nextLocation) {
+      setLocationLabel(mockUserLocation.label);
+      return;
+    }
+
+    setLocationLabel(`${nextLocation} 기준`);
+  }
+
+  const selectExpert = useCallback((expert: ExpertDiscoveryProfile) => {
     setSelectedExpertId(expert.id);
     void trackAnalyticsEvent({
       eventName: "expert_view",
@@ -422,7 +495,7 @@ function ExpertsDiscoveryContent({
         source: "radar_marker",
       },
     });
-  }
+  }, []);
 
   return (
     <main className="min-h-screen bg-[#F5F1E8] text-[#161616]">
@@ -434,25 +507,23 @@ function ExpertsDiscoveryContent({
           >
             TRUPICK
           </Link>
-          <button
-            type="button"
-            onClick={useDeviceLocation}
+          <Link
+            href="/how-we-verify"
             className="rounded-full border border-[#ddd8ce] bg-white px-4 py-2 text-sm font-bold text-[#31312d] shadow-sm transition hover:border-[#161616]"
           >
-            Use my location
-          </button>
+            검증 기준
+          </Link>
         </header>
 
         <section className="pt-12 text-center lg:pt-16">
-          <p className="text-sm font-black uppercase tracking-[0.22em] text-[#ff5a5f]">
-            Nearby experts
+          <p className="text-sm font-black uppercase tracking-[0.22em] text-[#0F5132]">
+            Fitness & Rehab Experts
           </p>
-          <h1 className="mx-auto mt-3 max-w-3xl text-[clamp(3rem,9vw,6.2rem)] font-black leading-[0.9] text-[#111111]">
-            Find talent by distance.
+          <h1 className="mx-auto mt-3 max-w-3xl text-[clamp(2.8rem,9vw,5.8rem)] font-black leading-[0.94] text-[#111111]">
+            운동/재활 전문가 찾기
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-base font-bold leading-8 text-[#4B5563] sm:text-lg">
-            가까운 검증 전문가를 탐색하고, category와 distance를 기준으로 가장
-            잘 맞는 사람을 빠르게 선택하세요.
+            내 목표와 현재 상태에 맞는 검증된 운동 전문가를 찾아보세요.
           </p>
 
           <div className="mx-auto mt-7 inline-flex rounded-[8px] border border-[#ded8ce] bg-white px-4 py-3 text-left shadow-sm">
@@ -462,6 +533,61 @@ function ExpertsDiscoveryContent({
                 <p className="mt-1 text-sm font-black text-[#111111]">
                   {locationLabel}
                 </p>
+          </div>
+        </section>
+
+        <section className="mt-8 rounded-[8px] border border-[#E5E7EB] bg-white p-5 shadow-[0_18px_60px_rgba(24,24,20,0.06)] sm:p-6">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+            <div className="flex-1">
+              <label className="text-xs font-black uppercase tracking-[0.16em] text-[#0F5132]">
+                지역명 검색
+              </label>
+              <input
+                value={locationSearch}
+                onChange={(event) => setLocationSearch(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    applyLocationSearch();
+                  }
+                }}
+                placeholder="예: 성수동, 강남구, 송파구"
+                className="mt-2 min-h-12 w-full rounded-full border border-[#D9CFBF] bg-[#FBFAF7] px-5 text-sm font-bold text-[#111111] outline-none placeholder:text-[#9CA3AF] focus:border-[#111111]"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={applyLocationSearch}
+              className="rounded-full bg-[#111111] px-5 py-4 text-sm font-black text-white transition hover:bg-[#333333]"
+            >
+              지역 적용
+            </button>
+            <button
+              type="button"
+              onClick={useDeviceLocation}
+              className="rounded-full border border-[#D9CFBF] bg-white px-5 py-4 text-sm font-black text-[#111111] transition hover:border-[#111111]"
+            >
+              현재 위치 사용
+            </button>
+          </div>
+          <div className="mt-5 flex flex-wrap gap-2">
+            {mapDistanceFilters.map((filter) => {
+              const isActive = maxDistanceFilter === filter.meters;
+
+              return (
+                <button
+                  key={filter.meters}
+                  type="button"
+                  onClick={() => setMaxDistanceFilter(filter.meters)}
+                  className={`rounded-full border px-4 py-2 text-sm font-black transition ${
+                    isActive
+                      ? "border-[#0F5132] bg-[#0F5132] text-white"
+                      : "border-[#E5E7EB] bg-white text-[#374151] hover:border-[#111111]"
+                  }`}
+                >
+                  {filter.label}
+                </button>
+              );
+            })}
           </div>
         </section>
 
@@ -475,9 +601,8 @@ function ExpertsDiscoveryContent({
                 전문가를 찾는 2가지 방법
               </h2>
             </div>
-            <p className="max-w-md text-sm font-bold leading-6 text-[#4B5563]">
-              직접 조건을 고르거나, AI가 질문 기반으로 TOP3를 추천하게 할 수
-              있습니다.
+              <p className="max-w-md text-sm font-bold leading-6 text-[#4B5563]">
+              직접 조건을 고르거나, 내 통증과 운동 경험을 바탕으로 AI 추천을 받을 수 있습니다.
             </p>
           </div>
 
@@ -490,12 +615,12 @@ function ExpertsDiscoveryContent({
                 조건이 명확할 때
               </h3>
               <p className="mt-3 text-sm font-bold leading-7 text-[#374151]">
-                원하는 분야나 지역을 직접 선택해서 전문가를 찾아보세요.
+                재활운동, 통증관리, 체형교정처럼 원하는 운동 분야와 지역을 직접 선택해보세요.
               </p>
               <ul className="mt-4 grid gap-2 text-sm font-bold text-[#111111]">
-                <li>✓ 분야/지역/경력 필터 검색</li>
-                <li>✓ 원하는 조건에 맞는 전문가 탐색</li>
-                <li>✓ 빠르게 직접 비교 가능</li>
+                <li>✓ 세부 분야/지역/거리 필터 검색</li>
+                <li>✓ 평점과 후기 수 기준 비교</li>
+                <li>✓ 상담 방식까지 빠르게 확인</li>
               </ul>
               <a
                 href="#expert-search"
@@ -513,10 +638,10 @@ function ExpertsDiscoveryContent({
                 상황 설명이 필요할 때
               </h3>
               <p className="mt-3 text-sm font-bold leading-7 text-[#374151]">
-                몇 가지 질문에 답하면 나에게 딱 맞는 전문가를 추천해드려요.
+                내 통증, 목표, 운동 경험을 바탕으로 적합한 운동 전문가를 추천받으세요.
               </p>
               <ul className="mt-4 grid gap-2 text-sm font-bold text-[#111111]">
-                <li>✓ 내 상황에 맞는 전문가 추천</li>
+                <li>✓ 통증 부위와 운동 목표 기반 추천</li>
                 <li>✓ 적합도 기반 TOP 3 추천</li>
                 <li>✓ 매칭 이유와 함께 확인 가능</li>
               </ul>
@@ -545,35 +670,15 @@ function ExpertsDiscoveryContent({
                 <aside className="rounded-[8px] bg-[#FBFAF7] p-3">
                   <div className="mb-3 flex items-center justify-between gap-2">
                     <p className="text-xs font-black uppercase tracking-[0.16em] text-[#0F5132]">
-                      Category
+                      Fitness beta
                     </p>
-                    {activeCategory ? (
-                      <Link
-                        href="/experts"
-                        className="text-xs font-black text-[#111111] underline underline-offset-4"
-                      >
-                        전체 보기
-                      </Link>
-                    ) : null}
                   </div>
-                  <div className="flex gap-2 overflow-x-auto pb-1 lg:grid lg:overflow-visible lg:pb-0">
-                    {expertCategories.map((category) => {
-                      const isActive = activeCategory === category.label;
-
-                      return (
-                        <Link
-                          key={category.label}
-                          href={getCategoryHref(category.label)}
-                          className={`shrink-0 rounded-[8px] border px-3 py-2 text-sm font-black transition hover:border-[#111111] lg:w-full ${
-                            isActive
-                              ? "border-[#0F5132] bg-[#0F5132] text-white"
-                              : "border-[#E5E7EB] bg-white text-[#111111]"
-                          }`}
-                        >
-                          {category.label}
-                        </Link>
-                      );
-                    })}
+                  <div className="rounded-[8px] border border-[#0F5132] bg-[#0F5132] px-3 py-3 text-sm font-black text-white">
+                    운동/재활
+                  </div>
+                  <div className="mt-3 grid gap-2 text-xs font-bold leading-5 text-[#4B5563]">
+                    <p>베타 기간에는 운동/재활 전문가만 노출합니다.</p>
+                    <p>통증, 자세, 체력, 스포츠 목표에 맞춰 비교하세요.</p>
                   </div>
                 </aside>
 
@@ -581,58 +686,45 @@ function ExpertsDiscoveryContent({
                   <div className="mb-4 flex items-end justify-between gap-3">
                     <div>
                       <p className="text-xs font-black uppercase tracking-[0.18em] text-[#ff5a5f]">
-                        {activeCategory ? "Sub fields" : "Categories"}
+                        Detail fields
                       </p>
                       <h2 className="mt-1 text-2xl font-black text-[#111111]">
-                        {activeCategory
-                          ? `${activeCategory} 전문가`
-                          : "필요한 분야를 선택하세요"}
+                        운동/재활 세부 분야
                       </h2>
                     </div>
                   </div>
 
-                  {activeCategory ? (
-                    <div className="flex flex-wrap gap-2">
-                      {subcategoryFilters[activeCategory].map((subcategory) => {
-                        const isActive = activeSubcategory === subcategory;
+                  <div className="flex flex-wrap gap-2">
+                    {subcategoryFilters[fitnessCategory].map((subcategory) => {
+                      const isActive = activeSubcategory === subcategory;
 
-                        return (
-                          <button
-                            key={subcategory}
-                            type="button"
-                            onClick={() => setActiveSubcategory(subcategory)}
-                            className={`rounded-full border px-4 py-2 text-sm font-black transition ${
-                              isActive
-                                ? "border-[#111111] bg-[#111111] text-white"
-                                : "border-[#E5E7EB] bg-white text-[#374151] hover:border-[#111111]"
-                            }`}
-                          >
-                            {subcategory}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                      {expertCategories.map((category) => (
-                        <Link
-                          key={category.label}
-                          href={getCategoryHref(category.label)}
-                          className="rounded-[8px] border border-[#E5E7EB] bg-white p-3 text-left transition hover:-translate-y-0.5 hover:border-[#111111]"
+                      return (
+                        <button
+                          key={subcategory}
+                          type="button"
+                          onClick={() => setActiveSubcategory(subcategory)}
+                          className={`rounded-full border px-4 py-2 text-sm font-black transition ${
+                            isActive
+                              ? "border-[#111111] bg-[#111111] text-white"
+                              : "border-[#E5E7EB] bg-white text-[#374151] hover:border-[#111111]"
+                          }`}
                         >
-                          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#111111] text-xs font-black text-white">
-                            {category.icon}
-                          </span>
-                          <span className="mt-3 block text-sm font-bold text-[#111111]">
-                            {category.label}
-                          </span>
-                          <span className="mt-1 block text-xs font-bold leading-5 text-[#4B5563]">
-                            {category.description}
-                          </span>
-                        </Link>
-                      ))}
-                    </div>
-                  )}
+                          {subcategory}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="mt-5 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+                    {["지역", "거리", "평점", "후기 수", "상담 방식"].map((filter) => (
+                      <div
+                        key={filter}
+                        className="rounded-[8px] border border-[#E5E7EB] bg-white px-4 py-3 text-sm font-black text-[#111111]"
+                      >
+                        {filter}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             </section>
@@ -641,7 +733,7 @@ function ExpertsDiscoveryContent({
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="닉네임, 직업, 카테고리 검색"
+                placeholder="닉네임, 운동 목표, 세부 분야 검색"
                 className="min-h-12 flex-1 rounded-full border border-[#ded8ce] bg-white px-5 text-sm font-bold text-[#111111] shadow-sm outline-none transition placeholder:text-[#9a9489] focus:border-[#111111]"
               />
               <div className="rounded-full border border-[#ded8ce] bg-white px-5 py-3 text-sm font-black text-[#111111] shadow-sm">
@@ -656,7 +748,77 @@ function ExpertsDiscoveryContent({
                       ? " 전체"
                       : ` · ${activeSubcategory}`
                   } 기준으로 전문가를 보여줍니다.`
-                : "전체 카테고리의 검증 전문가를 검색하고 비교할 수 있습니다."}
+                : "운동/재활 분야의 검증 전문가를 검색하고 비교할 수 있습니다."}
+            </div>
+
+            <div className="mt-5 grid gap-3">
+              {filteredExperts.map((expert) => (
+                <article
+                  key={expert.id}
+                  className={`rounded-[8px] border bg-white p-4 shadow-sm transition hover:-translate-y-0.5 ${
+                    selectedExpert?.id === expert.id
+                      ? "border-[#0F5132]"
+                      : "border-[#E5E7EB]"
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => selectExpert(expert)}
+                    className="flex w-full items-start gap-4 text-left"
+                  >
+                    <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full bg-[#E5E7EB]">
+                      <Image
+                        src={expert.photoUrl}
+                        alt={expert.nickname}
+                        fill
+                        sizes="64px"
+                        className="object-cover"
+                      />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-lg font-black text-[#111111]">
+                          {expert.nickname}
+                        </h3>
+                        {expert.planType === "premium" ? (
+                          <span className="rounded-full bg-[#111111] px-2 py-1 text-[10px] font-black text-white">
+                            PREMIUM
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="mt-1 text-sm font-bold text-[#374151]">
+                        {expert.profession}
+                      </p>
+                      <div className="mt-3 flex flex-wrap gap-2 text-xs font-black">
+                        <span className="rounded-full bg-[#F5F1E8] px-3 py-2 text-[#111111]">
+                          {expert.location}
+                        </span>
+                        <span className="rounded-full bg-[#E8F2EC] px-3 py-2 text-[#0F5132]">
+                          {formatDistance(expert.distanceMeters)}
+                        </span>
+                        <span className="rounded-full bg-[#FFF7ED] px-3 py-2 text-[#9A3412]">
+                          {formatConsultationMethods(expert.consultationMethods)}
+                        </span>
+                      </div>
+                    </div>
+                  </button>
+                  <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                    <Link
+                      href={`/experts/${expert.id}`}
+                      className="rounded-full bg-[#111111] px-4 py-3 text-center text-sm font-black text-white transition hover:bg-[#333333]"
+                    >
+                      상세페이지 이동
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => selectExpert(expert)}
+                      className="rounded-full border border-[#D9CFBF] bg-white px-4 py-3 text-sm font-black text-[#111111] transition hover:border-[#111111]"
+                    >
+                      프로필 열기
+                    </button>
+                  </div>
+                </article>
+              ))}
             </div>
           </div>
 
@@ -743,10 +905,26 @@ function ExpertsDiscoveryContent({
                     </div>
                     <div className="rounded-[8px] bg-[#f7f5ef] p-4">
                       <dt className="text-xs font-bold uppercase tracking-[0.14em] text-[#817b71]">
+                        Location
+                      </dt>
+                      <dd className="mt-2 text-sm font-black text-[#171717]">
+                        {selectedExpert.location}
+                      </dd>
+                    </div>
+                    <div className="rounded-[8px] bg-[#f7f5ef] p-4">
+                      <dt className="text-xs font-bold uppercase tracking-[0.14em] text-[#817b71]">
                         Reviews
                       </dt>
                       <dd className="mt-2 text-sm font-black text-[#171717]">
                         {selectedExpert.reviewCount}개
+                      </dd>
+                    </div>
+                    <div className="rounded-[8px] bg-[#f7f5ef] p-4">
+                      <dt className="text-xs font-bold uppercase tracking-[0.14em] text-[#817b71]">
+                        Method
+                      </dt>
+                      <dd className="mt-2 text-sm font-black text-[#171717]">
+                        {formatConsultationMethods(selectedExpert.consultationMethods)}
                       </dd>
                     </div>
                   </dl>
@@ -780,6 +958,12 @@ function ExpertsDiscoveryContent({
             )}
           </aside>
         </section>
+
+        <KakaoExpertMap
+          experts={filteredExperts}
+          selectedExpertId={selectedExpert?.id ?? null}
+          onSelectExpert={selectExpert}
+        />
 
         <section className="mt-10 pb-14">
           <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
@@ -871,8 +1055,10 @@ function ExpertsSearchParamBoundary() {
 
   return (
     <ExpertsDiscoveryContent
-      key={initialCategory ?? "all"}
-      initialCategory={initialCategory}
+      key={initialCategory === fitnessCategory ? initialCategory : fitnessCategory}
+      initialCategory={
+        initialCategory === fitnessCategory ? initialCategory : fitnessCategory
+      }
     />
   );
 }

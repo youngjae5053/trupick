@@ -201,6 +201,17 @@ export default function HowWeVerifyPage() {
 경력, 자격, 전문성, 인터뷰, 실제 사례를 바탕으로
 고객이 신뢰할 수 있는 전문가를 선별합니다.`}
           </p>
+          <div className="mt-6 rounded-[8px] border border-[#D9CFBF] bg-white p-5 shadow-sm">
+            <p className="text-sm font-black uppercase tracking-[0.16em] text-[#0F5132]">
+              Beta focus
+            </p>
+            <p className="mt-2 text-base font-black leading-7 text-[#111111]">
+              현재 베타는 운동/재활 전문가를 중심으로 운영됩니다.
+            </p>
+            <p className="mt-2 text-sm font-bold leading-7 text-[#374151]">
+              재활운동, 통증관리, 체형교정, 다이어트, 근력향상 전문가의 검증 기준을 먼저 고도화한 뒤 다른 분야로 확장할 예정입니다.
+            </p>
+          </div>
           <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
             <Link
               href="/experts"

@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import AuthNav from "@/app/components/AuthNav";
 import FavoriteButton from "@/app/components/FavoriteButton";
-import { expertCategories, getCategoryHref } from "@/app/expertCategories";
 import {
   ExpertDiscoveryProfile,
   getNearbyExperts,
@@ -42,7 +41,22 @@ type ReviewStats = Record<number, { rating: number; reviewCount: number }>;
 const proofItems = [
   { value: "4.9", label: "평균 만족도" },
   { value: "5km", label: "거리 기반 탐색" },
-  { value: "TOP3", label: "AI 추천 리포트" },
+  { value: "TOP3", label: "운동 전문가 AI 매칭" },
+];
+
+const fitnessSubcategories = [
+  "전체",
+  "재활운동",
+  "통증관리",
+  "체형교정",
+  "다이어트",
+  "근력향상",
+  "파워리프팅",
+  "필라테스",
+  "러닝",
+  "시니어 운동",
+  "산전산후 운동",
+  "스포츠 퍼포먼스",
 ];
 
 const whyItems = [
@@ -80,17 +94,36 @@ const reviews = [
   },
   {
     name: "박준호",
-    category: "세무",
+    category: "통증관리",
     quote:
-      "사업자 세금 상담이 막막했는데, 필요한 전문가만 추려서 볼 수 있어 시간이 정말 줄었습니다.",
+      "허리 통증 때문에 운동을 피했는데, 재활 경험이 있는 전문가를 만나 단계별로 다시 시작할 수 있었습니다.",
   },
   {
     name: "이하린",
-    category: "디자인",
+    category: "체형교정",
     quote:
-      "포트폴리오와 거리, 후기까지 한 번에 비교되니 의사결정이 훨씬 쉬웠어요.",
+      "자세 분석과 운동 루틴이 명확해서 혼자 할 때보다 훨씬 안심됐어요.",
   },
 ];
+
+function isFitnessExpert(expert: {
+  specialty?: string | null;
+  category?: string | null;
+  profession?: string | null;
+}) {
+  const text = [expert.specialty, expert.category, expert.profession]
+    .filter(Boolean)
+    .join(" ");
+
+  return (
+    text.includes("운동") ||
+    text.includes("재활") ||
+    text.includes("트레이너") ||
+    text.includes("필라테스") ||
+    text.includes("통증") ||
+    text.includes("체형")
+  );
+}
 
 function formatDistance(meters: number) {
   return meters < 1000 ? `${meters}m` : `${(meters / 1000).toFixed(1)}km`;
@@ -101,10 +134,15 @@ function toLandingExperts(
   fallbackExperts: ExpertDiscoveryProfile[],
   reviewStats: ReviewStats = {}
 ): LandingExpert[] {
+  const fitnessExperts = experts.filter(isFitnessExpert);
+  const fitnessFallbackExperts = fallbackExperts.filter(
+    (expert) => expert.category === "운동/재활"
+  );
   const source =
-    experts.length > 0
-      ? experts.map((expert, index) => {
-          const fallback = fallbackExperts[index % fallbackExperts.length];
+    fitnessExperts.length > 0
+      ? fitnessExperts.map((expert, index) => {
+          const fallback =
+            fitnessFallbackExperts[index % fitnessFallbackExperts.length];
           const stats = reviewStats[expert.id];
 
           return {
@@ -124,7 +162,7 @@ function toLandingExperts(
             canFavorite: true,
           };
         })
-      : fallbackExperts.slice(0, 3).map((expert) => ({
+      : fitnessFallbackExperts.slice(0, 3).map((expert) => ({
           id: expert.id,
           name: expert.nickname,
           profession: expert.profession,
@@ -241,10 +279,10 @@ export default function HomePage() {
             TRUSTED EXPERT NETWORK
           </p>
           <h1 className="mt-5 max-w-3xl text-[clamp(2.6rem,14vw,3.5rem)] font-extrabold leading-[1.05] tracking-normal text-[#111111] sm:tracking-[-0.04em]">
-            검증된 전문가를 찾는 가장 쉬운 방법
+            운동 전문가를 찾는 가장 신뢰할 수 있는 방법
           </h1>
           <p className="mt-6 max-w-2xl text-lg font-bold leading-8 text-[#4B5563] sm:text-xl">
-            TRUPICK은 경력, 자격, 인터뷰, 실제 사례를 바탕으로 전문가를 선별합니다.
+            TRUPICK은 재활운동, 통증관리, 체형교정, 다이어트, 근력향상 전문가를 검증 기준에 따라 선별합니다.
           </p>
 
           <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
@@ -252,19 +290,19 @@ export default function HomePage() {
               href="/experts"
               className="rounded-full bg-[#0F5132] px-7 py-4 text-center text-base font-black text-white shadow-[0_14px_40px_rgba(15,81,50,0.22)] transition hover:bg-[#146C43]"
             >
-              전문가 찾기
+              운동 전문가 찾기
             </Link>
             <Link
-              href="/register"
+              href="/match"
               className="rounded-full border border-[#d9d2c6] bg-white px-7 py-4 text-center text-base font-black text-[#111111] shadow-sm transition hover:border-[#111111]"
             >
-              전문가 등록
+              AI 매칭 시작하기
             </Link>
             <Link
-              href="/beta"
+              href="/how-we-verify"
               className="rounded-full border border-[#111111] bg-[#111111] px-7 py-4 text-center text-base font-black text-white shadow-sm transition hover:bg-[#333333]"
             >
-              Beta Test 참여하기
+              검증 기준 보기
             </Link>
           </div>
           <Link
@@ -396,27 +434,29 @@ export default function HomePage() {
               Categories
             </p>
             <h2 className="mt-3 text-4xl font-black tracking-normal text-[#111111]">
-              필요한 분야부터 선택하세요
+              운동 목표부터 선택하세요
             </h2>
           </div>
           <Link href="/experts" className="text-sm font-black text-[#0f3d2e]">
-            전체 전문가 보기
+            운동 전문가 보기
           </Link>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {expertCategories.map((category) => (
+          {fitnessSubcategories.map((category) => (
             <Link
-              key={category.label}
-              href={getCategoryHref(category.label)}
+              key={category}
+              href={`/experts?category=${encodeURIComponent("운동/재활")}`}
               className="rounded-[8px] border border-[#E5E7EB] bg-[#FFFFFF] p-5 shadow-sm transition hover:-translate-y-[4px] hover:border-[#111111] hover:shadow-[0_18px_45px_rgba(24,24,20,0.08)]"
             >
               <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#111111] text-sm font-black text-white">
-                {category.icon}
+                M
               </span>
-              <h3 className="mt-5 text-xl font-bold text-[#111111]">{category.label}</h3>
+              <h3 className="mt-5 text-xl font-bold text-[#111111]">{category}</h3>
               <p className="mt-2 text-sm font-bold leading-6 text-[#4B5563]">
-                {category.description}
+                {category === "전체"
+                  ? "검증된 운동/재활 전문가 전체 보기"
+                  : `${category} 목표에 맞는 전문가 탐색`}
               </p>
             </Link>
           ))}

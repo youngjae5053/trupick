@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { trackAnalyticsEvent } from "@/app/analytics";
 import { getFriendlyErrorMessage } from "@/app/errorMessages";
+import SocialAuthButtons from "@/app/components/SocialAuthButtons";
 import { getSupabaseBrowserClient } from "@/app/supabaseBrowser";
 
 type UserRole = "customer" | "expert";
@@ -193,6 +194,8 @@ export default function SignupPage() {
               </div>
             ))}
           </div>
+
+          <SocialAuthButtons mode="signup" />
 
           <form onSubmit={handleSubmit} className="mt-7 grid gap-5">
             <div className="grid gap-4 sm:grid-cols-2">
