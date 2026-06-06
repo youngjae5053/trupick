@@ -50,7 +50,7 @@ export default function SocialAuthButtons({
 
     setLoadingProvider(null);
 
-    if (!result.ok) {
+    if (!result.ok && provider !== "google") {
       setMessage(result.message || "소셜 로그인 설정 준비 중입니다.");
     }
   }

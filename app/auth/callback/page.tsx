@@ -6,8 +6,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { getFriendlyErrorMessage } from "@/app/errorMessages";
 import { getSupabaseBrowserClient } from "@/app/supabaseBrowser";
 
-type ProfileRole = "customer" | "expert" | "admin";
-
 function AuthCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -53,15 +51,15 @@ function AuthCallbackContent() {
 
       const { data: profile } = await supabase
         .from("profiles")
-        .select("id, role")
+        .select("id")
         .eq("id", userData.user.id)
-        .maybeSingle<{ id: string; role: ProfileRole | null }>();
+        .maybeSingle<{ id: string }>();
 
       if (!isMounted) {
         return;
       }
 
-      if (!profile || !profile.role) {
+      if (!profile) {
         router.replace("/onboarding");
         return;
       }
