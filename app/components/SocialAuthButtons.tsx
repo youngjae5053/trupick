@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Provider } from "@supabase/supabase-js";
 import { getSupabaseBrowserClient } from "@/app/supabaseBrowser";
 
@@ -41,6 +41,21 @@ export default function SocialAuthButtons({
   const [loadingProvider, setLoadingProvider] = useState<SocialProvider | null>(
     null
   );
+
+  useEffect(() => {
+    setLoadingProvider(null);
+    setMessage("");
+  }, []);
+
+  useEffect(() => {
+    const resetLoading = () => {
+      setLoadingProvider(null);
+      setMessage("");
+    };
+
+    window.addEventListener("pageshow", resetLoading);
+    return () => window.removeEventListener("pageshow", resetLoading);
+  }, []);
 
   const handleSocialAuth = async (provider: SocialProvider) => {
     setMessage("");
