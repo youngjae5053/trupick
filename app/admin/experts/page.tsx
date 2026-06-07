@@ -7,6 +7,21 @@ import { getFriendlyErrorMessage } from "@/app/errorMessages";
 
 type ApprovalFilter = "all" | "pending" | "approved" | "rejected";
 type ApprovalStatus = Exclude<ApprovalFilter, "all">;
+type VerificationCheckKey =
+  | "identity"
+  | "career"
+  | "qualification"
+  | "interview"
+  | "caseReview";
+type QualityCheckKey =
+  | "photo"
+  | "specialty"
+  | "description"
+  | "careerInfo"
+  | "certification"
+  | "casePortfolio"
+  | "consultationMethod"
+  | "contactAvailability";
 
 type Expert = {
   id: number;
@@ -30,6 +45,39 @@ const filters: Array<{ label: string; value: ApprovalFilter }> = [
   { label: "승인대기", value: "pending" },
   { label: "승인완료", value: "approved" },
   { label: "거절", value: "rejected" },
+];
+
+const verificationChecklist: Array<{
+  key: VerificationCheckKey;
+  label: string;
+}> = [
+  { key: "identity", label: "신원 확인" },
+  { key: "career", label: "경력 확인" },
+  { key: "qualification", label: "자격/증빙 확인" },
+  { key: "interview", label: "인터뷰 필요" },
+  { key: "caseReview", label: "사례 검토 완료" },
+];
+
+const profileQualityChecklist: Array<{
+  key: QualityCheckKey;
+  label: string;
+}> = [
+  { key: "photo", label: "프로필 사진" },
+  { key: "specialty", label: "전문 분야 명확성" },
+  { key: "description", label: "소개글 완성도" },
+  { key: "careerInfo", label: "경력 정보" },
+  { key: "certification", label: "자격/증빙" },
+  { key: "casePortfolio", label: "대표 사례" },
+  { key: "consultationMethod", label: "상담 방식" },
+  { key: "contactAvailability", label: "연락 가능 여부" },
+];
+
+const structuredDescriptionLabels = [
+  "상담 방식",
+  "전문가 철학",
+  "고객에게 약속하는 것",
+  "자주 받는 질문",
+  "대표 사례",
 ];
 
 const fallbackImage =
@@ -92,6 +140,98 @@ function getCertifications(certifications: Expert["certifications"]) {
   return [];
 }
 
+function getSectionValue(source: string | null | undefined, label: string) {
+  if (!source) {
+    return "";
+  }
+
+  const lines = source.split("\n");
+  const labelIndex = lines.findIndex((line) => line.trim() === label);
+
+  if (labelIndex < 0) {
+    return "";
+  }
+
+  const values: string[] = [];
+
+  for (const line of lines.slice(labelIndex + 1)) {
+    const trimmed = line.trim();
+
+    if (
+      structuredDescriptionLabels.includes(trimmed) ||
+      (trimmed.length === 0 && values.length > 0)
+    ) {
+      break;
+    }
+
+    if (trimmed.length > 0) {
+      values.push(trimmed);
+    }
+  }
+
+  return values.join("\n").trim();
+}
+
+function getLineValue(source: string | null | undefined, label: string) {
+  if (!source) {
+    return "";
+  }
+
+  const match = source.match(new RegExp(`${label}:\\s*([^\\n]+)`));
+
+  return match?.[1]?.trim() ?? "";
+}
+
+function getWizardSummary(expert: Expert) {
+  const consultationMethods = getSectionValue(expert.description, "상담 방식");
+  const philosophy = getSectionValue(expert.description, "전문가 철학");
+  const promise = getSectionValue(expert.description, "고객에게 약속하는 것");
+  const faq = getSectionValue(expert.description, "자주 받는 질문");
+  const casePortfolio = getSectionValue(expert.description, "대표 사례");
+  const careerYears = getLineValue(expert.career, "경력 년수");
+  const careerHighlights = getLineValue(expert.career, "주요 경력");
+  const confidentArea = getLineValue(expert.career, "가장 자신 있는 분야");
+  const customerType = getLineValue(expert.career, "잘 맞는 고객 유형");
+
+  return {
+    consultationMethods,
+    philosophy,
+    promise,
+    faq,
+    casePortfolio,
+    careerYears,
+    careerHighlights,
+    confidentArea,
+    customerType,
+  };
+}
+
+function getProfileCompletenessScore(expert: Expert) {
+  const summary = getWizardSummary(expert);
+  const certifications = getCertifications(expert.certifications);
+  const checks = [
+    Boolean(
+      expert.name &&
+        expert.location &&
+        expert.specialty &&
+        summary.consultationMethods
+    ),
+    Boolean(
+      summary.careerYears &&
+        summary.careerHighlights &&
+        summary.confidentArea &&
+        summary.customerType
+    ),
+    Boolean(
+      certifications.length > 0 && expert.portfolio_url && expert.sns_url
+    ),
+    Boolean(summary.philosophy && summary.promise && summary.faq),
+    Boolean(summary.casePortfolio),
+  ];
+
+  return checks.filter(Boolean).length * 20;
+}
+
 function renderLink(url: string | null | undefined, label: string) {
   if (!url) {
     return <span className="text-[#374151]">-</span>;
@@ -115,6 +255,29 @@ export default function AdminExpertsPage() {
   const [search, setSearch] = useState("");
   const [updatingId, setUpdatingId] = useState<number | null>(null);
   const [selectedExpert, setSelectedExpert] = useState<Expert | null>(null);
+  const [successMessage, setSuccessMessage] = useState("");
+  const [adminMemo, setAdminMemo] = useState("");
+  const [checklistState, setChecklistState] = useState<
+    Record<VerificationCheckKey, boolean>
+  >({
+    identity: false,
+    career: false,
+    qualification: false,
+    interview: false,
+    caseReview: false,
+  });
+  const [qualityChecklistState, setQualityChecklistState] = useState<
+    Record<QualityCheckKey, boolean>
+  >({
+    photo: false,
+    specialty: false,
+    description: false,
+    careerInfo: false,
+    certification: false,
+    casePortfolio: false,
+    consultationMethod: false,
+    contactAvailability: false,
+  });
 
   async function refreshExperts() {
     const supabase = getSupabaseBrowserClient();
@@ -179,6 +342,8 @@ export default function AdminExpertsPage() {
         .length,
       rejected: experts.filter((expert) => getExpertStatus(expert) === "rejected")
         .length,
+      hold: experts.filter((expert) => getExpertStatus(expert) === "pending")
+        .length,
     }),
     [experts]
   );
@@ -189,8 +354,19 @@ export default function AdminExpertsPage() {
     return experts.filter((expert) => {
       const status = getExpertStatus(expert);
       const matchesFilter = activeFilter === "all" || status === activeFilter;
+      const summary = getWizardSummary(expert);
+      const haystack = [
+        expert.name,
+        expert.specialty,
+        expert.location,
+        summary.confidentArea,
+        summary.customerType,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
       const matchesSearch =
-        keyword.length === 0 || expert.name.toLowerCase().includes(keyword);
+        keyword.length === 0 || haystack.includes(keyword);
 
       return matchesFilter && matchesSearch;
     });
@@ -270,6 +446,13 @@ export default function AdminExpertsPage() {
     await writeApprovalAnalytics(expert, status);
     setUpdatingId(null);
     setSelectedExpert(null);
+    setSuccessMessage(
+      status === "approved"
+        ? `${expert.name} 전문가를 승인했습니다.`
+        : status === "rejected"
+          ? `${expert.name} 전문가를 거절했습니다.`
+          : `${expert.name} 전문가를 보류 상태로 변경했습니다.`
+    );
     await refreshExperts();
   }
 
@@ -304,7 +487,59 @@ export default function AdminExpertsPage() {
         ? { ...current, plan_type: planType }
         : current
     );
+    setSuccessMessage(`${expert.name} 전문가 플랜을 ${planType}로 변경했습니다.`);
   }
+
+  function openReviewModal(expert: Expert) {
+    setSelectedExpert(expert);
+    setAdminMemo("");
+    setChecklistState({
+      identity: false,
+      career: false,
+      qualification: false,
+      interview: false,
+      caseReview: false,
+    });
+    setQualityChecklistState({
+      photo: Boolean(expert.image_url),
+      specialty: Boolean(expert.specialty),
+      description: Boolean(expert.description),
+      careerInfo: Boolean(expert.career),
+      certification: getCertifications(expert.certifications).length > 0,
+      casePortfolio: Boolean(getWizardSummary(expert).casePortfolio),
+      consultationMethod: Boolean(getWizardSummary(expert).consultationMethods),
+      contactAvailability: Boolean(expert.sns_url || expert.portfolio_url),
+    });
+  }
+
+  function toggleChecklistItem(key: VerificationCheckKey) {
+    setChecklistState((current) => ({
+      ...current,
+      [key]: !current[key],
+    }));
+  }
+
+  function toggleQualityChecklistItem(key: QualityCheckKey) {
+    setQualityChecklistState((current) => ({
+      ...current,
+      [key]: !current[key],
+    }));
+  }
+
+  const selectedSummary = selectedExpert
+    ? getWizardSummary(selectedExpert)
+    : null;
+  const selectedCertifications = selectedExpert
+    ? getCertifications(selectedExpert.certifications)
+    : [];
+  const selectedCompletenessScore = selectedExpert
+    ? getProfileCompletenessScore(selectedExpert)
+    : 0;
+  const qualityCompletionRate = Math.round(
+    (Object.values(qualityChecklistState).filter(Boolean).length /
+      profileQualityChecklist.length) *
+      100
+  );
 
   return (
     <main className="min-h-screen bg-[#F5F1E8] px-4 py-6 text-[#111111] sm:px-6 lg:px-10">
@@ -322,30 +557,40 @@ export default function AdminExpertsPage() {
                 제출된 정보를 검토하고 승인된 전문가만 서비스에 노출하세요.
               </p>
             </div>
-            <div className="grid grid-cols-3 gap-3">
-              {(["pending", "approved", "rejected"] as ApprovalStatus[]).map(
-                (status) => (
-                  <div
-                    key={status}
-                    className="rounded-[8px] border border-[#E5E7EB] bg-[#FBFAF7] p-4"
-                  >
-                    <p className="text-xs font-black uppercase tracking-[0.12em] text-[#374151]">
-                      {getStatusLabel(status)}
-                    </p>
-                    <p className="mt-2 text-3xl font-black text-[#111111]">
-                      {counts[status]}명
-                    </p>
-                  </div>
-                )
-              )}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+              {[
+                ["전체 신청", counts.all],
+                ["승인 대기", counts.pending],
+                ["승인 완료", counts.approved],
+                ["거절", counts.rejected],
+                ["보류", counts.hold],
+              ].map(([label, value]) => (
+                <div
+                  key={label}
+                  className="rounded-[8px] border border-[#E5E7EB] bg-[#FBFAF7] p-4"
+                >
+                  <p className="text-xs font-black uppercase tracking-[0.12em] text-[#374151]">
+                    {label}
+                  </p>
+                  <p className="mt-2 text-3xl font-black text-[#111111]">
+                    {value}명
+                  </p>
+                </div>
+              ))}
             </div>
           </div>
+
+          {successMessage ? (
+            <div className="mt-5 rounded-[8px] border border-[#B7E3C9] bg-[#E8F2EC] p-4 text-sm font-black text-[#0F5132]">
+              {successMessage}
+            </div>
+          ) : null}
 
           <div className="mt-7 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="이름으로 검색"
+              placeholder="이름, 분야, 지역으로 검색"
               className="min-h-12 w-full rounded-[8px] border border-[#D9CFBF] bg-[#FBFAF7] px-4 text-sm font-bold text-[#111111] outline-none placeholder:text-[#9CA3AF] focus:border-[#111111]"
             />
             <div className="grid grid-cols-4 gap-2">
@@ -371,6 +616,8 @@ export default function AdminExpertsPage() {
           {visibleExperts.map((expert) => {
             const status = getExpertStatus(expert);
             const certifications = getCertifications(expert.certifications);
+            const summary = getWizardSummary(expert);
+            const completenessScore = getProfileCompletenessScore(expert);
 
             return (
               <article
@@ -428,24 +675,30 @@ export default function AdminExpertsPage() {
 
                     <dl className="mt-4 grid gap-3 text-sm font-bold leading-6 text-[#374151] sm:grid-cols-2">
                       <div>
-                        <dt className="font-black text-[#111111]">전문 분야</dt>
+                        <dt className="font-black text-[#111111]">세부 분야</dt>
                         <dd>{expert.specialty}</dd>
                       </div>
                       <div>
-                        <dt className="font-black text-[#111111]">지역</dt>
+                        <dt className="font-black text-[#111111]">활동 지역</dt>
                         <dd>{expert.location}</dd>
                       </div>
                       <div>
-                        <dt className="font-black text-[#111111]">경력</dt>
-                        <dd>{expert.career || "-"}</dd>
+                        <dt className="font-black text-[#111111]">상담 방식</dt>
+                        <dd>{summary.consultationMethods || "-"}</dd>
+                      </div>
+                      <div>
+                        <dt className="font-black text-[#111111]">경력 년수</dt>
+                        <dd>{summary.careerYears || "-"}</dd>
+                      </div>
+                      <div>
+                        <dt className="font-black text-[#111111]">
+                          프로필 완성도
+                        </dt>
+                        <dd>{completenessScore}점</dd>
                       </div>
                       <div>
                         <dt className="font-black text-[#111111]">자격증</dt>
-                        <dd>
-                          {certifications.length > 0
-                            ? certifications.join(", ")
-                            : "-"}
-                        </dd>
+                        <dd>{certifications.length > 0 ? certifications.join(", ") : "-"}</dd>
                       </div>
                     </dl>
 
@@ -462,7 +715,7 @@ export default function AdminExpertsPage() {
                   <div className="flex shrink-0 flex-wrap gap-2 lg:w-[180px] lg:flex-col">
                     <button
                       type="button"
-                      onClick={() => setSelectedExpert(expert)}
+                      onClick={() => openReviewModal(expert)}
                       className="rounded-full border border-[#D9CFBF] bg-white px-5 py-3 text-sm font-black text-[#111111] transition hover:border-[#111111]"
                     >
                       상세 검토
@@ -474,6 +727,14 @@ export default function AdminExpertsPage() {
                       className="rounded-full bg-[#0F5132] px-5 py-3 text-sm font-black text-white transition hover:bg-[#146C43] disabled:opacity-70"
                     >
                       승인
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateExpertStatus(expert, "pending")}
+                      disabled={updatingId === expert.id}
+                      className="rounded-full bg-[#F59E0B] px-5 py-3 text-sm font-black text-white transition hover:bg-[#D97706] disabled:opacity-70"
+                    >
+                      보류
                     </button>
                     <button
                       type="button"
@@ -497,53 +758,136 @@ export default function AdminExpertsPage() {
         </section>
       </div>
 
-      {selectedExpert ? (
+      {selectedExpert && selectedSummary ? (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/45 px-4 py-6">
-          <div className="mx-auto max-w-5xl rounded-[8px] bg-white shadow-[0_28px_90px_rgba(0,0,0,0.24)]">
-            <div className="grid gap-0 lg:grid-cols-[360px_minmax(0,1fr)]">
-              <div className="min-h-80 overflow-hidden rounded-t-[8px] bg-[#E5E7EB] lg:rounded-l-[8px] lg:rounded-tr-none">
-                <Image
-                  src={selectedExpert.image_url || fallbackImage}
-                  alt={selectedExpert.name}
-                  width={720}
-                  height={720}
-                  unoptimized
-                  className="h-full min-h-80 w-full object-cover"
-                />
+          <div className="mx-auto max-w-6xl rounded-[8px] bg-white shadow-[0_28px_90px_rgba(0,0,0,0.24)]">
+            <div className="border-b border-[#E5E7EB] p-5 sm:p-7">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p className="text-sm font-black uppercase tracking-[0.18em] text-[#0F5132]">
+                    Verification Review
+                  </p>
+                  <h2 className="mt-2 text-3xl font-black text-[#111111]">
+                    {selectedExpert.name}
+                  </h2>
+                  <p className="mt-2 text-sm font-bold text-[#374151]">
+                    {selectedExpert.specialty} · {selectedExpert.location}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedExpert(null)}
+                  className="rounded-full border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-black text-[#111111] transition hover:border-[#111111]"
+                >
+                  닫기
+                </button>
               </div>
-              <div className="p-5 sm:p-7">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div>
-                    <p className="text-sm font-black uppercase tracking-[0.18em] text-[#0F5132]">
-                      Detailed Review
-                    </p>
-                    <h2 className="mt-2 text-3xl font-black text-[#111111]">
-                      {selectedExpert.name}
-                    </h2>
+              <div className="mt-5 flex flex-wrap gap-2">
+                <span
+                  className={`rounded-full px-3 py-1 text-xs font-black ${getStatusClassName(
+                    getExpertStatus(selectedExpert)
+                  )}`}
+                >
+                  {getStatusLabel(getExpertStatus(selectedExpert))}
+                </span>
+                <span className="rounded-full bg-[#F3F4F6] px-3 py-1 text-xs font-black text-[#374151]">
+                  {selectedExpert.plan_type === "premium" ? "PREMIUM" : "FREE"}
+                </span>
+                <span className="rounded-full bg-[#E8F2EC] px-3 py-1 text-xs font-black text-[#0F5132]">
+                  Completeness {selectedCompletenessScore}점
+                </span>
+                <span className="rounded-full bg-[#EEF2FF] px-3 py-1 text-xs font-black text-[#3730A3]">
+                  Quality {qualityCompletionRate}%
+                </span>
+              </div>
+            </div>
+
+            <div className="grid gap-0 lg:grid-cols-[320px_minmax(0,1fr)]">
+              <aside className="border-b border-[#E5E7EB] p-5 sm:p-7 lg:border-b-0 lg:border-r">
+                <div className="overflow-hidden rounded-[8px] bg-[#E5E7EB]">
+                  <Image
+                    src={selectedExpert.image_url || fallbackImage}
+                    alt={selectedExpert.name}
+                    width={640}
+                    height={640}
+                    unoptimized
+                    className="aspect-square w-full object-cover"
+                  />
+                </div>
+
+                <section className="mt-5 rounded-[8px] bg-[#FBFAF7] p-4">
+                  <h3 className="text-base font-black text-[#111111]">
+                    검증 체크리스트
+                  </h3>
+                  <div className="mt-3 grid gap-2">
+                    {verificationChecklist.map((item) => (
+                      <label
+                        key={item.key}
+                        className="flex items-center gap-3 rounded-[8px] bg-white p-3 text-sm font-black text-[#111111]"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checklistState[item.key]}
+                          onChange={() => toggleChecklistItem(item.key)}
+                          className="h-4 w-4 accent-[#0F5132]"
+                        />
+                        {item.label}
+                      </label>
+                    ))}
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedExpert(null)}
-                    className="rounded-full border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-black text-[#111111] transition hover:border-[#111111]"
-                  >
-                    닫기
-                  </button>
-                </div>
+                </section>
 
-                <div className="mt-5 flex flex-wrap gap-2">
-                  <span
-                    className={`rounded-full px-3 py-1 text-xs font-black ${getStatusClassName(
-                      getExpertStatus(selectedExpert)
-                    )}`}
-                  >
-                    {getStatusLabel(getExpertStatus(selectedExpert))}
-                  </span>
-                  <span className="rounded-full bg-[#F3F4F6] px-3 py-1 text-xs font-black text-[#374151]">
-                    {selectedExpert.plan_type === "premium" ? "PREMIUM" : "FREE"}
-                  </span>
-                </div>
+                <section className="mt-5 rounded-[8px] bg-[#FBFAF7] p-4">
+                  <div className="flex items-end justify-between gap-4">
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-[0.14em] text-[#0F5132]">
+                        Profile Quality
+                      </p>
+                      <h3 className="mt-2 text-base font-black text-[#111111]">
+                        프로필 품질 체크
+                      </h3>
+                    </div>
+                    <p className="text-3xl font-black tracking-[-0.04em] text-[#111111]">
+                      {qualityCompletionRate}%
+                    </p>
+                  </div>
+                  <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#E5E7EB]">
+                    <div
+                      className="h-full rounded-full bg-[#0F5132]"
+                      style={{ width: `${qualityCompletionRate}%` }}
+                    />
+                  </div>
+                  <div className="mt-4 grid gap-2">
+                    {profileQualityChecklist.map((item) => (
+                      <label
+                        key={item.key}
+                        className="flex items-center gap-3 rounded-[8px] bg-white p-3 text-sm font-black text-[#111111]"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={qualityChecklistState[item.key]}
+                          onChange={() => toggleQualityChecklistItem(item.key)}
+                          className="h-4 w-4 accent-[#0F5132]"
+                        />
+                        {item.label}
+                      </label>
+                    ))}
+                  </div>
+                </section>
 
-                <div className="mt-5 rounded-[8px] border border-[#D9CFBF] bg-white p-4">
+                <section className="mt-5 rounded-[8px] bg-[#FBFAF7] p-4">
+                  <h3 className="text-base font-black text-[#111111]">
+                    관리자 메모
+                  </h3>
+                  <textarea
+                    value={adminMemo}
+                    onChange={(event) => setAdminMemo(event.target.value)}
+                    placeholder="승인 사유 또는 보완이 필요한 부분을 기록하세요."
+                    className="mt-3 min-h-32 w-full resize-y rounded-[8px] border border-[#D9CFBF] bg-white px-4 py-3 text-sm font-bold leading-6 text-[#111111] outline-none placeholder:text-[#9CA3AF] focus:border-[#111111]"
+                  />
+                </section>
+
+                <section className="mt-5 rounded-[8px] border border-[#D9CFBF] bg-white p-4">
                   <p className="text-xs font-black uppercase tracking-[0.14em] text-[#374151]">
                     Plan Type
                   </p>
@@ -563,42 +907,98 @@ export default function AdminExpertsPage() {
                     <option value="free">Free Plan</option>
                     <option value="premium">Premium Plan</option>
                   </select>
-                </div>
+                </section>
+              </aside>
 
-                <dl className="mt-6 grid gap-4 text-sm font-bold leading-7 text-[#374151] sm:grid-cols-2">
+              <div className="p-5 sm:p-7">
+                <div className="grid gap-4">
                   {[
-                    ["전문 분야", selectedExpert.specialty],
-                    ["지역", selectedExpert.location],
-                    ["경력", selectedExpert.career || "-"],
-                    [
-                      "자격증",
-                      getCertifications(selectedExpert.certifications).join(", ") ||
-                        "-",
-                    ],
-                  ].map(([label, value]) => (
-                    <div key={label} className="rounded-[8px] bg-[#FBFAF7] p-4">
-                      <dt className="font-black text-[#111111]">{label}</dt>
-                      <dd className="mt-1">{value}</dd>
-                    </div>
+                    {
+                      title: "Basic Info",
+                      rows: [
+                        ["이름", selectedExpert.name],
+                        ["세부 분야", selectedExpert.specialty],
+                        ["활동 지역", selectedExpert.location],
+                        ["상담 방식", selectedSummary.consultationMethods || "-"],
+                      ],
+                    },
+                    {
+                      title: "Expertise",
+                      rows: [
+                        ["경력 년수", selectedSummary.careerYears || "-"],
+                        ["주요 경력", selectedSummary.careerHighlights || "-"],
+                        ["자신 있는 분야", selectedSummary.confidentArea || "-"],
+                        ["잘 맞는 고객", selectedSummary.customerType || "-"],
+                      ],
+                    },
+                    {
+                      title: "Verification",
+                      rows: [
+                        [
+                          "자격/증빙",
+                          selectedCertifications.length > 0
+                            ? selectedCertifications.join(", ")
+                            : "-",
+                        ],
+                        [
+                          "포트폴리오",
+                          selectedExpert.portfolio_url ? "링크 있음" : "-",
+                        ],
+                        ["SNS/웹사이트", selectedExpert.sns_url ? "링크 있음" : "-"],
+                      ],
+                    },
+                    {
+                      title: "Philosophy",
+                      rows: [
+                        ["전문가 철학", selectedSummary.philosophy || "-"],
+                        ["고객 약속", selectedSummary.promise || "-"],
+                        ["Q&A", selectedSummary.faq || "-"],
+                      ],
+                    },
+                    {
+                      title: "Case Portfolio",
+                      rows: [["대표 사례", selectedSummary.casePortfolio || "-"]],
+                    },
+                  ].map((section) => (
+                    <section
+                      key={section.title}
+                      className="rounded-[8px] border border-[#E5E7EB] bg-[#FBFAF7] p-4"
+                    >
+                      <h3 className="text-lg font-black text-[#111111]">
+                        {section.title}
+                      </h3>
+                      <dl className="mt-4 grid gap-3 text-sm font-bold leading-7 text-[#374151] md:grid-cols-2">
+                        {section.rows.map(([label, value]) => (
+                          <div key={label} className="rounded-[8px] bg-white p-4">
+                            <dt className="font-black text-[#111111]">{label}</dt>
+                            <dd className="mt-1 whitespace-pre-wrap">{value}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    </section>
                   ))}
-                </dl>
 
-                <section className="mt-4 rounded-[8px] bg-[#FBFAF7] p-4">
-                  <h3 className="text-base font-black text-[#111111]">
-                    자기소개
-                  </h3>
-                  <p className="mt-3 text-sm font-bold leading-7 text-[#374151]">
-                    {selectedExpert.description || "-"}
-                  </p>
-                </section>
-
-                <section className="mt-4 rounded-[8px] bg-[#FBFAF7] p-4">
-                  <h3 className="text-base font-black text-[#111111]">링크</h3>
-                  <div className="mt-3 flex flex-wrap gap-4 text-sm">
-                    {renderLink(selectedExpert.portfolio_url, "포트폴리오 열기")}
-                    {renderLink(selectedExpert.sns_url, "SNS 열기")}
-                  </div>
-                </section>
+                  <section className="rounded-[8px] border border-[#E5E7EB] bg-white p-5">
+                    <p className="text-sm font-black uppercase tracking-[0.16em] text-[#0F5132]">
+                      Profile Preview
+                    </p>
+                    <h3 className="mt-3 text-2xl font-black text-[#111111]">
+                      {selectedExpert.name}
+                    </h3>
+                    <p className="mt-2 text-sm font-bold leading-6 text-[#374151]">
+                      {selectedExpert.specialty} · {selectedExpert.location}
+                    </p>
+                    <p className="mt-4 text-sm font-bold leading-7 text-[#374151]">
+                      {selectedSummary.philosophy ||
+                        selectedExpert.description ||
+                        "소개가 입력되지 않았습니다."}
+                    </p>
+                    <div className="mt-4 flex flex-wrap gap-4 text-sm">
+                      {renderLink(selectedExpert.portfolio_url, "포트폴리오 열기")}
+                      {renderLink(selectedExpert.sns_url, "SNS 열기")}
+                    </div>
+                  </section>
+                </div>
 
                 <div className="mt-6 flex flex-wrap gap-2">
                   <button
@@ -608,6 +1008,14 @@ export default function AdminExpertsPage() {
                     className="rounded-full bg-[#0F5132] px-6 py-3 text-sm font-black text-white transition hover:bg-[#146C43] disabled:opacity-70"
                   >
                     승인
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateExpertStatus(selectedExpert, "pending")}
+                    disabled={updatingId === selectedExpert.id}
+                    className="rounded-full bg-[#F59E0B] px-6 py-3 text-sm font-black text-white transition hover:bg-[#D97706] disabled:opacity-70"
+                  >
+                    보류
                   </button>
                   <button
                     type="button"

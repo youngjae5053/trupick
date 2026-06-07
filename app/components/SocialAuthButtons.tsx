@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import type { Provider } from "@supabase/supabase-js";
 import { getSupabaseBrowserClient } from "@/app/supabaseBrowser";
 
-type SocialProvider = "google" | "kakao" | "naver";
+type SocialProvider = "google" | "kakao";
 
 const socialButtons: Array<{
   provider: SocialProvider;
@@ -24,12 +24,6 @@ const socialButtons: Array<{
     signupLabel: "Kakao로 시작하기",
     mark: "K",
   },
-  {
-    provider: "naver",
-    loginLabel: "Naver로 계속하기",
-    signupLabel: "Naver로 시작하기",
-    mark: "N",
-  },
 ];
 
 export default function SocialAuthButtons({
@@ -41,11 +35,6 @@ export default function SocialAuthButtons({
   const [loadingProvider, setLoadingProvider] = useState<SocialProvider | null>(
     null
   );
-
-  useEffect(() => {
-    setLoadingProvider(null);
-    setMessage("");
-  }, []);
 
   useEffect(() => {
     const resetLoading = () => {
@@ -127,8 +116,7 @@ export default function SocialAuthButtons({
       </div>
 
       <p className="mt-3 text-xs font-bold leading-5 text-[#6B7280]">
-        Google은 Supabase OAuth Provider 설정 후 바로 사용할 수 있습니다. Kakao와
-        Naver는 Provider 설정 완료 후 연결됩니다.
+        Google과 Kakao 계정으로 빠르게 시작할 수 있습니다.
       </p>
 
       {message ? (

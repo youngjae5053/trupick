@@ -4,7 +4,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import AuthNav from "@/app/components/AuthNav";
-import FavoriteButton from "@/app/components/FavoriteButton";
 import {
   ExpertDiscoveryProfile,
   getNearbyExperts,
@@ -33,77 +32,33 @@ type LandingExpert = {
   isPremium: boolean;
   photoUrl: string;
   href: string;
-  canFavorite: boolean;
 };
 
 type ReviewStats = Record<number, { rating: number; reviewCount: number }>;
 
-const proofItems = [
-  { value: "4.9", label: "평균 만족도" },
-  { value: "5km", label: "거리 기반 탐색" },
-  { value: "TOP3", label: "운동 전문가 AI 매칭" },
-];
-
-const fitnessSubcategories = [
-  "전체",
-  "재활운동",
-  "통증관리",
-  "체형교정",
-  "다이어트",
-  "근력향상",
-  "파워리프팅",
-  "필라테스",
-  "러닝",
-  "시니어 운동",
-  "산전산후 운동",
-  "스포츠 퍼포먼스",
-];
-
-const whyItems = [
+const standards = [
   {
-    icon: "VE",
-    title: "Verified Experts",
-    description:
-      "경력, 자격, 인터뷰, 실제 사례를 검토한 전문가만 소개합니다.",
+    title: "Credentials",
+    description: "자격, 이력, 활동 정보를 확인해 기본 신뢰 기준을 세웁니다.",
   },
   {
-    icon: "IN",
-    title: "Interview Based",
-    description: "전문가의 철학과 문제 해결 방식을 인터뷰로 확인합니다.",
+    title: "Expertise",
+    description: "재활운동, 통증관리, 체형교정 등 실제 전문성을 검토합니다.",
   },
   {
-    icon: "RC",
-    title: "Real Cases",
-    description: "실제 사례와 후기를 통해 전문성을 확인할 수 있습니다.",
+    title: "Interview",
+    description: "전문가의 철학, 문제 해결 방식, 고객 응대 태도를 확인합니다.",
+  },
+  {
+    title: "Monitoring",
+    description: "후기, 응답률, 상담 품질을 지속적으로 살펴봅니다.",
   },
 ];
 
-const steps = [
-  ["STEP 1", "전문가 찾기"],
-  ["STEP 2", "상담 요청"],
-  ["STEP 3", "전문가 매칭"],
-  ["STEP 4", "문제 해결"],
-];
-
-const reviews = [
-  {
-    name: "김서연",
-    category: "운동/재활",
-    quote:
-      "집 근처에서 재활 경험이 있는 코치를 바로 찾았어요. 첫 상담부터 제 상태를 정확히 짚어줘서 안심됐습니다.",
-  },
-  {
-    name: "박준호",
-    category: "통증관리",
-    quote:
-      "허리 통증 때문에 운동을 피했는데, 재활 경험이 있는 전문가를 만나 단계별로 다시 시작할 수 있었습니다.",
-  },
-  {
-    name: "이하린",
-    category: "체형교정",
-    quote:
-      "자세 분석과 운동 루틴이 명확해서 혼자 할 때보다 훨씬 안심됐어요.",
-  },
+const storyPoints = [
+  "TRUPICK은 단순히 많은 전문가를 보여주는 서비스가 아닙니다.",
+  "고객의 몸과 시간에 직접 영향을 주는 운동/재활 영역에서 신뢰할 수 있는 선택지를 만드는 것이 목표입니다.",
+  "검증 기준, 실제 후기, 거리 기반 탐색을 통해 더 적은 고민으로 더 나은 전문가를 만날 수 있게 돕습니다.",
 ];
 
 function isFitnessExpert(expert: {
@@ -149,17 +104,16 @@ function toLandingExperts(
             id: expert.id,
             name: expert.name,
             profession: expert.specialty,
-            category: expert.category || fallback?.category || "전문가",
-            rating: stats?.rating ?? 0,
-            reviews: stats?.reviewCount ?? 0,
+            category: expert.category || fallback?.category || "운동/재활",
+            rating: stats?.rating ?? fallback?.rating ?? 4.9,
+            reviews: stats?.reviewCount ?? fallback?.reviewCount ?? 0,
             distance: fallback ? formatDistance(fallback.distanceMeters) : "1.2km",
             isPremium: expert.plan_type === "premium",
             photoUrl:
               expert.image_url ||
               fallback?.photoUrl ||
-              "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=240&q=80",
+              "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=600&q=80",
             href: `/experts/${expert.id}`,
-            canFavorite: true,
           };
         })
       : fitnessFallbackExperts.slice(0, 3).map((expert) => ({
@@ -173,7 +127,6 @@ function toLandingExperts(
           isPremium: expert.planType === "premium",
           photoUrl: expert.photoUrl,
           href: "/experts",
-          canFavorite: false,
         }));
 
   return source
@@ -193,62 +146,50 @@ export default function HomePage() {
 
     async function loadLandingData() {
       const nearbyExperts = await getNearbyExperts();
-      const supabase = getSupabaseBrowserClient();
 
       if (isMounted) {
         setFallbackExperts(nearbyExperts);
       }
 
-      if (!supabase) {
-        return;
-      }
-
-      const { data } = await supabase
-        .from("experts")
-        .select("*")
-        .eq("approved", true)
-        .eq("approval_status", "approved")
-        .order("plan_type", { ascending: false })
-        .limit(3);
-
-      const { data: reviewRows } = await supabase
-        .from("reviews")
-        .select("expert_id, rating")
-        .returns<Array<{ expert_id: number; rating: number }>>();
-
-      const nextReviewStats =
-        reviewRows?.reduce<ReviewStats>((stats, review) => {
-          const current = stats[review.expert_id] ?? {
-            rating: 0,
-            reviewCount: 0,
-          };
-          const nextCount = current.reviewCount + 1;
-
-          stats[review.expert_id] = {
-            rating:
-              (current.rating * current.reviewCount + review.rating) / nextCount,
-            reviewCount: nextCount,
-          };
-
-          return stats;
-        }, {}) ?? {};
-
-      if (isMounted) {
-        setReviewStats(nextReviewStats);
-
-        if (data) {
-          setExperts(data);
-          return;
-        }
-
-        const { data: fallbackData } = await supabase
+      try {
+        const supabase = getSupabaseBrowserClient();
+        const { data } = await supabase
           .from("experts")
           .select("*")
           .eq("approved", true)
           .eq("approval_status", "approved")
+          .order("plan_type", { ascending: false })
           .limit(3);
 
-        setExperts(fallbackData || []);
+        const { data: reviewRows } = await supabase
+          .from("reviews")
+          .select("expert_id, rating")
+          .returns<Array<{ expert_id: number; rating: number }>>();
+
+        const nextReviewStats =
+          reviewRows?.reduce<ReviewStats>((stats, review) => {
+            const current = stats[review.expert_id] ?? {
+              rating: 0,
+              reviewCount: 0,
+            };
+            const nextCount = current.reviewCount + 1;
+
+            stats[review.expert_id] = {
+              rating:
+                (current.rating * current.reviewCount + review.rating) /
+                nextCount,
+              reviewCount: nextCount,
+            };
+
+            return stats;
+          }, {}) ?? {};
+
+        if (isMounted) {
+          setReviewStats(nextReviewStats);
+          setExperts(data || []);
+        }
+      } catch (error) {
+        console.error("Failed to load featured experts", error);
       }
     }
 
@@ -264,341 +205,266 @@ export default function HomePage() {
     [experts, fallbackExperts, reviewStats]
   );
 
+  const mapExperts = featuredExperts.length > 0 ? featuredExperts : [];
+
   return (
     <main className="min-h-screen bg-[#F5F1E8] text-[#111111]">
       <header className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-5 sm:flex-nowrap sm:px-6 lg:px-8">
-        <Link href="/" className="text-2xl font-extrabold tracking-[0.16em] text-[#111111]">
+        <Link
+          href="/"
+          className="text-2xl font-extrabold tracking-[0.16em] text-[#111111]"
+        >
           TRUPICK
         </Link>
         <AuthNav />
       </header>
 
-      <section className="mx-auto grid w-full max-w-7xl gap-8 px-4 pb-14 pt-6 sm:px-6 lg:grid-cols-[minmax(0,1fr)_440px] lg:gap-10 lg:px-8 lg:pb-28 lg:pt-16">
-        <div>
-          <p className="text-sm font-black uppercase tracking-[0.22em] text-[#0f3d2e]">
-            TRUSTED EXPERT NETWORK
+      <section className="mx-auto flex min-h-[calc(100vh-88px)] w-full max-w-7xl flex-col justify-center px-4 py-16 sm:px-6 lg:px-8">
+        <div className="max-w-5xl">
+          <p className="text-sm font-black uppercase tracking-[0.28em] text-[#0F5132]">
+            Premium Verified Network
           </p>
-          <h1 className="mt-5 max-w-3xl text-[clamp(2.6rem,14vw,3.5rem)] font-extrabold leading-[1.05] tracking-normal text-[#111111] sm:tracking-[-0.04em]">
-            운동 전문가를 찾는 가장 신뢰할 수 있는 방법
+          <h1 className="mt-8 text-[clamp(4rem,16vw,9.5rem)] font-black leading-[0.86] tracking-[-0.055em] text-[#111111]">
+            TRUPICK
           </h1>
-          <p className="mt-6 max-w-2xl text-lg font-bold leading-8 text-[#4B5563] sm:text-xl">
-            TRUPICK은 재활운동, 통증관리, 체형교정, 다이어트, 근력향상 전문가를 검증 기준에 따라 선별합니다.
+          <p className="mt-8 max-w-4xl text-[clamp(2.35rem,8vw,5.5rem)] font-black leading-[0.96] tracking-[-0.045em] text-[#111111]">
+            Verified Experts. Nothing Less.
+          </p>
+          <p className="mt-8 max-w-2xl text-lg font-bold leading-8 text-[#374151] sm:text-xl">
+            운동/재활 전문가를 경력, 전문성, 인터뷰, 실제 사례 기준으로
+            선별합니다. 가까운 전문가를 더 명확하게 비교하고 상담까지
+            이어가세요.
           </p>
 
-          <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+          <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
             <Link
               href="/experts"
-              className="rounded-full bg-[#0F5132] px-7 py-4 text-center text-base font-black text-white shadow-[0_14px_40px_rgba(15,81,50,0.22)] transition hover:bg-[#146C43]"
+              className="rounded-full bg-[#0F5132] px-8 py-4 text-center text-base font-black text-white shadow-[0_18px_50px_rgba(15,81,50,0.22)] transition hover:bg-[#146C43]"
             >
-              운동 전문가 찾기
+              전문가 찾기
             </Link>
             <Link
-              href="/match"
-              className="rounded-full border border-[#d9d2c6] bg-white px-7 py-4 text-center text-base font-black text-[#111111] shadow-sm transition hover:border-[#111111]"
+              href="/register"
+              className="rounded-full border border-[#111111] bg-white px-8 py-4 text-center text-base font-black text-[#111111] shadow-sm transition hover:-translate-y-0.5"
             >
-              AI 매칭 시작하기
+              전문가 등록
             </Link>
-            <Link
-              href="/how-we-verify"
-              className="rounded-full border border-[#111111] bg-[#111111] px-7 py-4 text-center text-base font-black text-white shadow-sm transition hover:bg-[#333333]"
-            >
-              검증 기준 보기
-            </Link>
-          </div>
-          <Link
-            href="/onboarding"
-            className="mt-5 inline-flex text-sm font-black text-[#0F5132] underline underline-offset-4"
-          >
-            처음이신가요? TRUPICK 이용 흐름 보기
-          </Link>
-
-          <div className="mt-10 grid max-w-xl gap-3 sm:grid-cols-3">
-            {proofItems.map((item) => (
-              <div
-                key={item.label}
-                className="rounded-[8px] border border-[#E5E7EB] bg-[#FFFFFF] p-4 shadow-sm"
-              >
-                <p className="text-2xl font-black">{item.value}</p>
-                <p className="mt-1 text-xs font-bold leading-5 text-[#6c665d]">
-                  {item.label}
-                </p>
-              </div>
-            ))}
           </div>
         </div>
+      </section>
 
-        <div className="relative min-h-[420px] overflow-hidden rounded-[8px] border border-[#E5E7EB] bg-[#FFFFFF] shadow-[0_28px_90px_rgba(24,24,20,0.13)] sm:min-h-[520px]">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_45%,rgba(255,255,255,0.95)_0%,rgba(242,239,230,0.92)_52%,rgba(225,219,207,0.98)_100%)]" />
-          <div className="absolute left-1/2 top-1/2 h-24 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full border-[6px] border-white bg-[#ff5a5f] text-center text-sm font-black leading-[5.3rem] text-white shadow-[0_18px_50px_rgba(255,90,95,0.34)]">
-            YOU
-          </div>
-          {[0.38, 0.62, 0.84].map((scale) => (
-            <div
-              key={scale}
-              className="absolute left-1/2 top-1/2 rounded-full border border-[#111111]/10"
-              style={{
-                width: `${scale * 100}%`,
-                height: `${scale * 100}%`,
-                transform: "translate(-50%, -50%)",
-              }}
-            />
+      <section className="mx-auto w-full max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
+        <div className="max-w-3xl">
+          <p className="text-sm font-black uppercase tracking-[0.22em] text-[#0F5132]">
+            Our Standards
+          </p>
+          <h2 className="mt-4 text-4xl font-black tracking-[-0.03em] text-[#111111] sm:text-6xl">
+            신뢰는 기준에서 시작됩니다.
+          </h2>
+        </div>
+
+        <div className="mt-12 grid gap-px overflow-hidden rounded-[8px] border border-[#E5E7EB] bg-[#E5E7EB] md:grid-cols-4">
+          {standards.map((item) => (
+            <article key={item.title} className="bg-white p-6 sm:p-8">
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-[#0F5132]">
+                {item.title}
+              </p>
+              <p className="mt-5 text-lg font-bold leading-8 text-[#374151]">
+                {item.description}
+              </p>
+            </article>
           ))}
-          {featuredExperts.map((expert, index) => {
+        </div>
+      </section>
+
+      <section className="mx-auto grid w-full max-w-7xl gap-8 px-4 py-20 sm:px-6 lg:grid-cols-[0.85fr_1.15fr] lg:px-8">
+        <div className="flex flex-col justify-center">
+          <p className="text-sm font-black uppercase tracking-[0.22em] text-[#0F5132]">
+            Find Experts Nearby
+          </p>
+          <h2 className="mt-4 text-4xl font-black tracking-[-0.03em] text-[#111111] sm:text-6xl">
+            가까운 전문가를 지도에서 찾으세요.
+          </h2>
+          <p className="mt-6 text-lg font-bold leading-8 text-[#374151]">
+            현재는 TRUPICK의 위치 기반 데이터 구조로 전문가 위치와 거리를
+            표시합니다. Kakao Map 키를 연결하면 실제 지도 위 마커로 확장할 수
+            있도록 구성했습니다.
+          </p>
+          <Link
+            href="/experts"
+            className="mt-8 inline-flex w-fit rounded-full bg-[#111111] px-7 py-4 text-sm font-black text-white transition hover:bg-[#333333]"
+          >
+            지도 기반 탐색 열기
+          </Link>
+        </div>
+
+        <div className="relative min-h-[520px] overflow-hidden rounded-[8px] border border-[#D9CFBF] bg-[#EFE8DC] shadow-[0_28px_90px_rgba(24,24,20,0.12)]">
+          <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(17,17,17,0.05)_1px,transparent_1px),linear-gradient(0deg,rgba(17,17,17,0.05)_1px,transparent_1px)] bg-[size:56px_56px]" />
+          <div className="absolute left-[10%] top-[18%] h-28 w-44 rounded-[8px] bg-white/65" />
+          <div className="absolute right-[10%] top-[10%] h-40 w-56 rounded-[8px] bg-white/55" />
+          <div className="absolute bottom-[12%] left-[15%] h-36 w-60 rounded-[8px] bg-white/50" />
+          <div className="absolute bottom-[20%] right-[12%] h-28 w-44 rounded-[8px] bg-white/60" />
+
+          {mapExperts.map((expert, index) => {
             const positions = [
-              "left-[12%] top-[16%]",
-              "right-[9%] top-[30%]",
-              "left-[18%] bottom-[14%]",
+              "left-[18%] top-[24%]",
+              "right-[18%] top-[40%]",
+              "left-[36%] bottom-[20%]",
             ];
 
             return (
               <Link
                 key={expert.id}
                 href={expert.href}
-                className={`absolute ${positions[index]} w-56 rounded-[8px] border border-[#E5E7EB] bg-[#FFFFFF] p-3 shadow-[0_18px_50px_rgba(24,24,20,0.14)] transition hover:-translate-y-[4px]`}
+                className={`absolute ${positions[index]} flex -translate-x-1/2 -translate-y-1/2 items-center gap-3 rounded-full border border-[#E5E7EB] bg-white px-3 py-2 shadow-[0_16px_42px_rgba(24,24,20,0.16)] transition hover:-translate-y-[calc(50%+4px)]`}
               >
-                <div className="flex items-center gap-3">
-                  <div className="relative h-14 w-14 overflow-hidden rounded-full bg-[#ebe7df]">
-                    <Image
-                      src={expert.photoUrl}
-                      alt={expert.name}
-                      fill
-                      sizes="56px"
-                      className="object-cover"
-                    />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-bold text-[#111111]">{expert.name}</p>
-                    <p className="truncate text-xs font-bold text-[#6c665d]">
-                      {expert.distance} · {expert.rating.toFixed(1)}
-                    </p>
-                  </div>
-                </div>
-                {expert.isPremium ? (
-                  <p className="mt-3 inline-flex rounded-full bg-[#111111] px-3 py-1 text-[11px] font-black text-white">
-                    ✓ PREMIUM
-                  </p>
-                ) : null}
+                <span className="relative h-11 w-11 overflow-hidden rounded-full bg-[#E5E7EB]">
+                  <Image
+                    src={expert.photoUrl}
+                    alt={expert.name}
+                    fill
+                    sizes="44px"
+                    className="object-cover"
+                  />
+                </span>
+                <span className="min-w-0 pr-2">
+                  <span className="block max-w-28 truncate text-sm font-black text-[#111111]">
+                    {expert.name}
+                  </span>
+                  <span className="block text-xs font-bold text-[#4B5563]">
+                    {expert.distance}
+                  </span>
+                </span>
               </Link>
             );
           })}
-        </div>
-      </section>
 
-      <section className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-        <div className="rounded-[8px] border border-[#E5E7EB] bg-white p-6 shadow-[0_24px_70px_rgba(24,24,20,0.08)] sm:p-8 lg:p-10">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <p className="text-sm font-black uppercase tracking-[0.18em] text-[#0F5132]">
-                Why TRUPICK
-              </p>
-              <h2 className="mt-3 text-3xl font-black leading-tight text-[#111111] sm:text-4xl">
-                검증된 전문가 플랫폼이어야 하는 이유
-              </h2>
-              <p className="mt-4 max-w-3xl text-base font-bold leading-8 text-[#374151]">
-                프로필만 보고 선택하기 어려운 전문가 서비스를 TRUPICK의 검증 기준으로 더 명확하게 비교하세요.
-              </p>
-            </div>
-            <Link
-              href="/how-we-verify"
-              className="rounded-full bg-[#0F5132] px-6 py-4 text-center text-sm font-black text-white shadow-[0_14px_40px_rgba(15,81,50,0.18)] transition hover:bg-[#146C43]"
-            >
-              TRUPICK 검증 기준 보기
-            </Link>
-          </div>
-
-          <div className="mt-8 grid gap-4 md:grid-cols-3">
-            {whyItems.map((item) => (
-              <article
-                key={item.title}
-                className="rounded-[8px] border border-[#E5E7EB] bg-[#FBFAF7] p-5 transition hover:-translate-y-[4px] hover:border-[#111111]"
-              >
-                <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[#111111] text-xs font-black text-white">
-                  {item.icon}
-                </span>
-                <h3 className="mt-5 text-2xl font-black text-[#111111]">
-                  {item.title}
-                </h3>
-                <p className="mt-3 text-sm font-bold leading-7 text-[#374151]">
-                  {item.description}
-                </p>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-        <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="text-sm font-black uppercase tracking-[0.18em] text-[#0f3d2e]">
-              Categories
+          <div className="absolute bottom-5 left-5 rounded-[8px] border border-[#E5E7EB] bg-white p-4 shadow-sm">
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-[#0F5132]">
+              Kakao Map Ready
             </p>
-            <h2 className="mt-3 text-4xl font-black tracking-normal text-[#111111]">
-              운동 목표부터 선택하세요
+            <p className="mt-2 text-sm font-bold text-[#374151]">
+              위치 검색, 현재 위치, 전문가 마커 연동 예정
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto w-full max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
+        <div className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-sm font-black uppercase tracking-[0.22em] text-[#0F5132]">
+              Featured Experts
+            </p>
+            <h2 className="mt-4 text-4xl font-black tracking-[-0.03em] text-[#111111] sm:text-6xl">
+              검증된 전문가 3명
             </h2>
           </div>
-          <Link href="/experts" className="text-sm font-black text-[#0f3d2e]">
-            운동 전문가 보기
-          </Link>
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {fitnessSubcategories.map((category) => (
-            <Link
-              key={category}
-              href={`/experts?category=${encodeURIComponent("운동/재활")}`}
-              className="rounded-[8px] border border-[#E5E7EB] bg-[#FFFFFF] p-5 shadow-sm transition hover:-translate-y-[4px] hover:border-[#111111] hover:shadow-[0_18px_45px_rgba(24,24,20,0.08)]"
-            >
-              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#111111] text-sm font-black text-white">
-                M
-              </span>
-              <h3 className="mt-5 text-xl font-bold text-[#111111]">{category}</h3>
-              <p className="mt-2 text-sm font-bold leading-6 text-[#4B5563]">
-                {category === "전체"
-                  ? "검증된 운동/재활 전문가 전체 보기"
-                  : `${category} 목표에 맞는 전문가 탐색`}
-              </p>
-            </Link>
-          ))}
-        </div>
-      </section>
-
-      <section className="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-        <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="text-sm font-black uppercase tracking-[0.18em] text-[#0f3d2e]">
-              Featured experts
-            </p>
-            <h2 className="mt-3 text-4xl font-black text-[#111111]">오늘의 추천 전문가</h2>
-          </div>
-          <Link href="/experts" className="text-sm font-black text-[#0f3d2e]">
-            전체 보기
+          <Link href="/experts" className="text-sm font-black text-[#0F5132]">
+            전체 전문가 보기
           </Link>
         </div>
 
         <div className="grid gap-5 lg:grid-cols-3">
           {featuredExperts.map((expert) => (
-            <article
+            <Link
               key={expert.id}
-              className="overflow-hidden rounded-[8px] border border-[#E5E7EB] bg-[#FFFFFF] shadow-[0_20px_65px_rgba(24,24,20,0.09)] transition hover:-translate-y-[4px]"
+              href={expert.href}
+              className="group overflow-hidden rounded-[8px] border border-[#E5E7EB] bg-white shadow-[0_22px_70px_rgba(24,24,20,0.08)] transition hover:-translate-y-1"
             >
-              <Link href={expert.href} className="block">
-                <div className="relative h-72 bg-[#ebe7df]">
-                  <Image
-                    src={expert.photoUrl}
-                    alt={expert.name}
-                    fill
-                    sizes="(max-width: 1024px) 100vw, 33vw"
-                    className="object-cover"
-                  />
-                  {expert.isPremium ? (
-                    <span className="absolute left-4 top-4 rounded-full bg-[#111111] px-4 py-2 text-xs font-black text-white">
-                      ✓ PREMIUM
-                    </span>
-                  ) : null}
-                </div>
-              </Link>
-              <div className="p-5">
-                <div className="flex items-start justify-between gap-3">
-                  <Link href={expert.href} className="min-w-0">
-                    <h3 className="text-2xl font-bold text-[#111111]">
+              <div className="relative h-80 bg-[#E5E7EB]">
+                <Image
+                  src={expert.photoUrl}
+                  alt={expert.name}
+                  fill
+                  sizes="(max-width: 1024px) 100vw, 33vw"
+                  className="object-cover transition duration-500 group-hover:scale-[1.03]"
+                />
+                {expert.isPremium ? (
+                  <span className="absolute left-4 top-4 rounded-full bg-[#111111] px-4 py-2 text-xs font-black text-white">
+                    Premium Expert
+                  </span>
+                ) : null}
+              </div>
+              <div className="p-6">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <h3 className="truncate text-2xl font-black text-[#111111]">
                       {expert.name}
                     </h3>
-                    <p className="mt-1 text-sm font-bold text-[#4B5563]">
+                    <p className="mt-2 text-sm font-bold leading-6 text-[#374151]">
                       {expert.profession}
                     </p>
-                  </Link>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <span className="rounded-full bg-[#f7f3ea] px-3 py-2 text-xs font-black">
-                      {expert.distance}
-                    </span>
-                    {expert.canFavorite ? (
-                      <FavoriteButton expertId={expert.id} size="compact" />
-                    ) : null}
                   </div>
+                  <span className="shrink-0 rounded-full bg-[#F5F1E8] px-3 py-2 text-xs font-black text-[#111111]">
+                    {expert.distance}
+                  </span>
                 </div>
-                <div className="mt-5 flex flex-wrap gap-2 text-sm font-black">
-                  <span className="rounded-full bg-[#e8f2ec] px-3 py-2 text-[#0f3d2e]">
+                <div className="mt-6 flex flex-wrap gap-2 text-xs font-black">
+                  <span className="rounded-full bg-[#E8F2EC] px-3 py-2 text-[#0F5132]">
                     ★ {expert.rating.toFixed(1)}
                   </span>
-                  <span className="rounded-full bg-[#f7f3ea] px-3 py-2">
-                    후기 {expert.reviews}개
+                  <span className="rounded-full bg-[#F5F1E8] px-3 py-2 text-[#111111]">
+                    후기 {expert.reviews}
                   </span>
-                  <span className="rounded-full bg-[#fff1ec] px-3 py-2 text-[#d65339]">
+                  <span className="rounded-full bg-[#FFF1EC] px-3 py-2 text-[#D65339]">
                     {expert.category}
                   </span>
                 </div>
               </div>
-            </article>
+            </Link>
           ))}
         </div>
       </section>
 
-      <section className="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-        <p className="text-sm font-black uppercase tracking-[0.18em] text-[#0f3d2e]">
-          How it works
-        </p>
-        <h2 className="mt-3 text-4xl font-black text-[#111111]">실제 이용 흐름</h2>
-        <div className="mt-8 grid gap-3 md:grid-cols-4">
-          {steps.map(([step, title]) => (
-            <div
-              key={step}
-              className="rounded-[8px] border border-[#E5E7EB] bg-[#FFFFFF] p-5 shadow-sm transition hover:-translate-y-[4px]"
-            >
-              <p className="text-xs font-black text-[#8a8073]">{step}</p>
-              <h3 className="mt-5 text-2xl font-bold text-[#111111]">{title}</h3>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-        <p className="text-sm font-black uppercase tracking-[0.18em] text-[#0f3d2e]">
-          Reviews
-        </p>
-        <h2 className="mt-3 text-4xl font-black text-[#111111]">사용자가 먼저 경험했습니다</h2>
-        <Link
-          href="/reviews"
-          className="mt-3 inline-flex text-sm font-black text-[#0F5132] underline underline-offset-4"
-        >
-          전체 후기 보기
-        </Link>
-        <div className="mt-8 grid gap-4 lg:grid-cols-3">
-          {reviews.map((review) => (
-            <article
-              key={review.name}
-              className="rounded-[8px] border border-[#E5E7EB] bg-[#FFFFFF] p-6 shadow-sm transition hover:-translate-y-[4px]"
-            >
-              <p className="text-sm font-black text-[#0f3d2e]">
-                {review.category}
-              </p>
-              <p className="mt-5 text-lg font-black leading-8">
-                “{review.quote}”
-              </p>
-              <p className="mt-5 text-sm font-bold text-[#4B5563]">
-                {review.name}
-              </p>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <footer className="border-t border-[#E5E7EB] bg-[#FFFFFF]">
-        <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-10 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
+      <section className="mx-auto w-full max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
+        <div className="grid gap-10 rounded-[8px] border border-[#E5E7EB] bg-white p-6 shadow-[0_28px_90px_rgba(24,24,20,0.08)] sm:p-10 lg:grid-cols-[0.85fr_1.15fr] lg:p-14">
           <div>
-            <p className="text-xl font-extrabold tracking-[0.16em] text-[#111111]">TRUPICK</p>
-            <p className="mt-2 text-sm font-bold text-[#4B5563]">
-              검증된 전문가를 가장 쉽게 찾는 방법
+            <p className="text-sm font-black uppercase tracking-[0.22em] text-[#0F5132]">
+              About TRUPICK
             </p>
+            <h2 className="mt-4 text-4xl font-black tracking-[-0.03em] text-[#111111] sm:text-6xl">
+              신뢰할 수 있는 선택을 더 쉽게.
+            </h2>
           </div>
+          <div className="space-y-6">
+            {storyPoints.map((point) => (
+              <p
+                key={point}
+                className="text-lg font-bold leading-9 text-[#374151] sm:text-xl"
+              >
+                {point}
+              </p>
+            ))}
+            <div className="flex flex-col gap-3 pt-4 sm:flex-row">
+              <Link
+                href="/how-we-verify"
+                className="rounded-full bg-[#0F5132] px-7 py-4 text-center text-sm font-black text-white transition hover:bg-[#146C43]"
+              >
+                검증 기준 보기
+              </Link>
+              <Link
+                href="/match"
+                className="rounded-full border border-[#D9CFBF] bg-white px-7 py-4 text-center text-sm font-black text-[#111111] transition hover:border-[#111111]"
+              >
+                AI 매칭 시작하기
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <footer className="border-t border-[#E5E7EB] bg-white">
+        <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-8 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
+          <p className="text-lg font-black tracking-[0.16em] text-[#111111]">
+            TRUPICK
+          </p>
           <nav className="flex flex-wrap gap-4 text-sm font-black text-[#111111]">
-            <Link href="/">회사 소개</Link>
-            <Link href="/">이용약관</Link>
-            <Link href="/">개인정보처리방침</Link>
-            <Link href="/how-we-verify">검증 기준</Link>
-            <Link href="/beta">Beta Test</Link>
-            <Link href="/feedback">피드백</Link>
-            <Link href="/request">문의하기</Link>
+            <Link href="/experts">Experts</Link>
+            <Link href="/become-expert">Become Expert</Link>
+            <Link href="/register">Register</Link>
+            <Link href="/how-we-verify">Verification</Link>
+            <Link href="/feedback">Feedback</Link>
           </nav>
         </div>
       </footer>

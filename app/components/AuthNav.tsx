@@ -97,6 +97,13 @@ export default function AuthNav() {
       >
         검증 기준
       </Link>
+      <Link
+        href="/become-expert"
+        style={secondaryMobileLinkStyle}
+        className="hidden sm:inline"
+      >
+        전문가로 등록
+      </Link>
       <Link href="/beta" style={secondaryMobileLinkStyle} className="hidden sm:inline">
         Beta Test
       </Link>
@@ -110,6 +117,20 @@ export default function AuthNav() {
               </Link>
               <Link href="/admin/requests" style={linkStyle}>
                 상담 관리
+              </Link>
+              <Link
+                href="/admin/expert-invites"
+                style={secondaryMobileLinkStyle}
+                className="hidden sm:inline"
+              >
+                초대 관리
+              </Link>
+              <Link
+                href="/admin/expert-onboarding"
+                style={secondaryMobileLinkStyle}
+                className="hidden sm:inline"
+              >
+                온보딩
               </Link>
               <Link
                 href="/admin/reviews"
