@@ -2,13 +2,10 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { trackAnalyticsEvent } from "@/app/analytics";
-import {
-  ExpertCategory,
-  expertCategories,
-  isExpertCategory,
-} from "@/app/expertCategories";
+import ConsultationRequestFlow from "@/app/components/ConsultationRequestFlow";
+import { ExpertCategory } from "@/app/expertCategories";
 import {
   ExpertDiscoveryProfile,
   getNearbyExperts,
@@ -17,11 +14,11 @@ import { getProfileCompleteness } from "@/app/profileCompleteness";
 import { getSupabaseBrowserClient } from "@/app/supabaseBrowser";
 
 type MatchAnswers = {
-  need: ExpertCategory | "";
   concern: string;
+  experience: string;
   goal: string;
-  budget: string;
   region: string;
+  method: string;
 };
 
 type ExpertRow = {
@@ -55,56 +52,45 @@ type MatchCandidate = {
   completenessScore: number;
   planType: "free" | "premium";
   distance: string;
+  consultationMethods: string[];
 };
 
 type MatchResult = MatchCandidate & {
   score: number;
   reason: string;
-  scoreParts: {
-    category: number;
-    region: number;
-    specialty: number;
-    rating: number;
-    completeness: number;
-  };
 };
 
 type ReviewStats = Record<number, { rating: number; reviewCount: number }>;
 
 const initialAnswers: MatchAnswers = {
-  need: "",
   concern: "",
+  experience: "",
   goal: "",
-  budget: "",
   region: "",
+  method: "",
 };
 
-const budgetOptions = [
-  "10만원 이하",
-  "10~30만원",
-  "30~50만원",
-  "50만원 이상",
-  "상담 후 결정",
+const concernOptions = [
+  "어깨 통증",
+  "허리 통증",
+  "체형교정",
+  "다이어트",
+  "근력향상",
+  "러닝",
+  "재활",
 ];
 
-const categoryKeywords: Record<ExpertCategory, string[]> = {
-  "운동/재활": [
-    "운동",
-    "재활",
-    "통증",
-    "체형",
-    "교정",
-    "근력",
-    "어깨",
-    "허리",
-    "자세",
-  ],
-  세무: ["세무", "세금", "절세", "신고", "사업자", "부가세", "소득세"],
-  법률: ["법률", "계약", "분쟁", "변호", "소송", "자문", "합의"],
-  "사진/영상": ["사진", "영상", "촬영", "편집", "프로필", "콘텐츠"],
-  디자인: ["디자인", "브랜드", "로고", "UI", "웹", "시각", "포트폴리오"],
-  마케팅: ["마케팅", "광고", "퍼널", "전환", "콘텐츠", "성장", "캠페인"],
-  심리상담: ["심리", "상담", "관계", "불안", "스트레스", "마음"],
+const experienceOptions = ["초보", "6개월 미만", "1년 이상", "3년 이상"];
+const methodOptions = ["센터 방문", "온라인", "방문 상담", "상관없음"];
+
+const concernKeywords: Record<string, string[]> = {
+  "어깨 통증": ["어깨", "견갑", "회전근개", "상체", "통증"],
+  "허리 통증": ["허리", "요통", "코어", "골반", "통증"],
+  체형교정: ["체형", "자세", "교정", "라운드숄더", "골반"],
+  다이어트: ["다이어트", "체중", "감량", "식습관", "체지방"],
+  근력향상: ["근력", "근육", "웨이트", "파워", "강화"],
+  러닝: ["러닝", "달리기", "마라톤", "보행", "지구력"],
+  재활: ["재활", "기능회복", "통증", "운동처방", "회복"],
 };
 
 const fallbackImage =
@@ -116,10 +102,6 @@ function formatDistance(meters: number) {
 
 function deriveCategory(value: string | null | undefined): ExpertCategory {
   const text = value || "";
-
-  if (isExpertCategory(text)) {
-    return text;
-  }
 
   if (/운동|재활|트레이너|체형|통증|필라테스/.test(text)) {
     return "운동/재활";
@@ -156,11 +138,26 @@ function normalizeText(value: string) {
   return value.toLowerCase().replace(/\s/g, "");
 }
 
+function normalizeArray(value: string[] | string | null | undefined) {
+  if (Array.isArray(value)) {
+    return value.filter(Boolean);
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    return value
+      .split(/[,/·]+/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
 function getKeywordScore(answers: MatchAnswers, expert: MatchCandidate) {
-  const answerText = `${answers.concern} ${answers.goal} ${answers.need}`;
+  const answerText = `${answers.concern} ${answers.goal}`;
   const expertText = `${expert.profession} ${expert.description} ${expert.career}`;
   const keywords = [
-    ...categoryKeywords[expert.category],
+    ...(concernKeywords[answers.concern] ?? []),
     ...answerText
       .split(/[\s,./·]+/)
       .map((word) => word.trim())
@@ -171,37 +168,45 @@ function getKeywordScore(answers: MatchAnswers, expert: MatchCandidate) {
     normalizeText(expertText).includes(normalizeText(keyword))
   ).length;
 
-  return Math.min(20, matchedCount * 4);
+  return Math.min(38, matchedCount * 7);
 }
 
 function getRegionScore(region: string, expertLocation: string) {
   if (!region.trim()) {
-    return 8;
+    return 10;
   }
 
   const target = normalizeText(region);
   const location = normalizeText(expertLocation);
 
   if (location.includes(target) || target.includes(location)) {
-    return 20;
+    return 18;
   }
 
   const shortTarget = target.slice(0, 2);
 
-  return shortTarget && location.includes(shortTarget) ? 14 : 4;
+  return shortTarget && location.includes(shortTarget) ? 12 : 3;
 }
 
 function buildReason(answers: MatchAnswers, expert: MatchCandidate) {
   const goal = answers.goal.trim() || answers.concern.trim() || "현재 목표";
-  const categoryReason =
-    expert.category === answers.need
-      ? "요청한 카테고리와 정확히 일치하고"
-      : "인접한 전문성을 보유하고";
+  const keywordScore = getKeywordScore(answers, expert);
   const regionReason = getRegionScore(answers.region, expert.location) >= 14;
+  const methodReason =
+    answers.method === "상관없음" ||
+    expert.consultationMethods.some((method) => method.includes(answers.method));
+  const premiumReason =
+    expert.planType === "premium"
+      ? " TRUPICK Premium 전문가라 추천 노출 가산점도 반영했습니다."
+      : "";
 
-  return `${goal}에 맞춰 ${categoryReason}, ${expert.profession} 경험이 풍부한 전문가입니다.${
-    regionReason ? " 선호 지역과도 가까워 상담 연결 가능성이 높습니다." : ""
-  }`;
+  return `${answers.concern} 고민과 ${goal} 목표에 맞춰 ${expert.profession} 경험을 우선 반영했습니다. ${
+    keywordScore >= 21
+      ? "전문 분야와 소개에 관련 키워드가 잘 맞습니다."
+      : "상담 전 현재 상태를 구체적으로 공유하면 더 정확한 방향을 받을 수 있습니다."
+  } ${regionReason ? "선호 지역과도 가까워 연결 가능성이 높습니다." : ""} ${
+    methodReason ? "원하는 상담 방식도 대응 가능합니다." : ""
+  }${premiumReason}`.replace(/\s+/g, " ");
 }
 
 function calculateMatches(
@@ -210,27 +215,28 @@ function calculateMatches(
 ): MatchResult[] {
   return experts
     .map((expert) => {
-      const category = expert.category === answers.need ? 30 : 8;
       const region = getRegionScore(answers.region, expert.location);
       const specialty = getKeywordScore(answers, expert);
-      const rating = Math.min(15, Math.round((expert.rating / 5) * 15));
+      const method =
+        answers.method === "상관없음" ||
+        expert.consultationMethods.length === 0 ||
+        expert.consultationMethods.some((methodItem) =>
+          methodItem.includes(answers.method)
+        )
+          ? 12
+          : 3;
+      const rating = Math.min(12, Math.round((expert.rating / 5) * 12));
       const completeness = Math.min(
-        15,
-        Math.round((expert.completenessScore / 100) * 15)
+        10,
+        Math.round((expert.completenessScore / 100) * 10)
       );
-      const rawScore = category + region + specialty + rating + completeness;
+      const premium = expert.planType === "premium" ? 8 : 0;
+      const rawScore = 18 + region + specialty + method + rating + completeness + premium;
 
       return {
         ...expert,
         score: Math.min(99, rawScore),
         reason: buildReason(answers, expert),
-        scoreParts: {
-          category,
-          region,
-          specialty,
-          rating,
-          completeness,
-        },
       };
     })
     .sort(
@@ -239,7 +245,8 @@ function calculateMatches(
         Number(b.planType === "premium") - Number(a.planType === "premium") ||
         b.rating - a.rating
     )
-    .slice(0, 3);
+    .filter((expert) => expert.score >= 35)
+    .slice(0, 5);
 }
 
 function mapMockExperts(experts: ExpertDiscoveryProfile[]): MatchCandidate[] {
@@ -266,6 +273,7 @@ function mapMockExperts(experts: ExpertDiscoveryProfile[]): MatchCandidate[] {
     }).score,
     planType: expert.planType,
     distance: formatDistance(expert.distanceMeters),
+    consultationMethods: expert.consultationMethods,
   }));
 }
 
@@ -302,24 +310,9 @@ function mapExpertRows(
       }).score,
       planType: expert.plan_type === "premium" ? "premium" : "free",
       distance: mock ? formatDistance(mock.distanceMeters) : "상담 가능",
+      consultationMethods: normalizeArray(expert.consultation_methods),
     };
   });
-}
-
-function ScoreRing({ score }: { score: number }) {
-  return (
-    <div
-      className="relative flex h-20 w-20 shrink-0 items-center justify-center rounded-full"
-      style={{
-        background: `conic-gradient(#0F5132 ${score * 3.6}deg, #E7E1D6 0deg)`,
-      }}
-      aria-label={`적합도 ${score}%`}
-    >
-      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white">
-        <span className="text-xl font-black text-[#111111]">{score}%</span>
-      </div>
-    </div>
-  );
 }
 
 export default function MatchPage() {
@@ -330,7 +323,6 @@ export default function MatchPage() {
     useState<MatchAnswers | null>(null);
   const [loadingExperts, setLoadingExperts] = useState(true);
   const [saveState, setSaveState] = useState("");
-  const [downloadState, setDownloadState] = useState("PDF 다운로드");
 
   useEffect(() => {
     let isMounted = true;
@@ -398,22 +390,10 @@ export default function MatchPage() {
     };
   }, []);
 
-  const generatedAt = useMemo(
-    () =>
-      new Intl.DateTimeFormat("ko-KR", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      }).format(new Date()),
-    []
-  );
-
-  const bestResult = results[0];
-
   function updateAnswer(key: keyof MatchAnswers, value: string) {
     setAnswers((current) => ({
       ...current,
-      [key]: key === "need" && isExpertCategory(value) ? value : value,
+      [key]: value,
     }));
     setSaveState("");
   }
@@ -421,7 +401,7 @@ export default function MatchPage() {
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!answers.need || !answers.concern || !answers.goal || !answers.budget) {
+    if (!answers.concern || !answers.experience || !answers.goal || !answers.method) {
       setSaveState("필수 질문을 모두 입력해주세요.");
       return;
     }
@@ -437,8 +417,9 @@ export default function MatchPage() {
       eventName: "ai_match_started",
       page: "/match",
       metadata: {
-        category: answers.need,
-        budget: answers.budget,
+        concern: answers.concern,
+        experience: answers.experience,
+        method: answers.method,
         region: answers.region || null,
       },
     });
@@ -449,14 +430,9 @@ export default function MatchPage() {
       metadata: {
         top_score: nextResults[0]?.score ?? null,
         top_expert: nextResults[0]?.name ?? null,
-        category: nextResults[0]?.category ?? answers.need,
+        concern: answers.concern,
       },
     });
-  }
-
-  function handlePdfDownload() {
-    setDownloadState("준비 완료");
-    window.alert("PDF 다운로드는 곧 제공될 예정입니다.");
   }
 
   return (
@@ -489,29 +465,27 @@ export default function MatchPage() {
           <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-end">
             <div>
               <p className="text-sm font-black uppercase tracking-[0.2em] text-[#0F5132]">
-                AI matching
+                Fitness Expert Finder
               </p>
               <h1 className="mt-3 max-w-4xl text-[clamp(2.6rem,10vw,5.4rem)] font-black leading-[0.98] tracking-normal text-[#111111] sm:tracking-[-0.04em]">
-                나에게 맞는 전문가를 찾아보세요.
+                운동 고민에 맞는 전문가를 추천해드려요.
               </h1>
               <p className="mt-5 max-w-2xl text-base font-bold leading-8 text-[#374151] sm:text-lg">
-                몇 가지 질문에 답하면 카테고리, 지역, 전문 분야, 평점, 프로필
-                완성도를 기준으로 적합한 전문가 TOP3를 추천합니다.
+                어깨 통증, 허리 통증, 체형교정, 다이어트 같은 현재 고민과
+                목표를 입력하면 바로 상담 신청까지 이어지는 전문가 3~5명을
+                추천합니다.
               </p>
             </div>
 
             <div className="rounded-[8px] border border-[#E5E7EB] bg-white p-5 shadow-[0_18px_60px_rgba(30,28,24,0.08)]">
               <p className="text-xs font-black uppercase tracking-[0.18em] text-[#374151]">
-                Report date
+                Recommendation
               </p>
-              <p className="mt-2 text-lg font-black">{generatedAt}</p>
-              <button
-                type="button"
-                onClick={handlePdfDownload}
-                className="mt-4 w-full rounded-full bg-[#0F5132] px-5 py-3 text-sm font-black text-white transition hover:bg-[#146C43]"
-              >
-                {downloadState}
-              </button>
+              <p className="mt-2 text-3xl font-black text-[#111111]">3~5명</p>
+              <p className="mt-3 text-sm font-bold leading-6 text-[#374151]">
+                검증 완료 전문가 중 고민 키워드, 지역, 상담 방식, Premium 여부를
+                함께 반영합니다.
+              </p>
             </div>
           </div>
         </section>
@@ -525,73 +499,63 @@ export default function MatchPage() {
               Matching questions
             </p>
             <h2 className="mt-3 text-3xl font-black text-[#111111]">
-              상담 목표 입력
+              고민과 목표 입력
             </h2>
 
             <div className="mt-6 grid gap-5">
               <label className="grid gap-2">
                 <span className="text-sm font-black text-[#111111]">
-                  어떤 도움이 필요한가요?
+                  현재 고민
                 </span>
                 <select
-                  value={answers.need}
-                  onChange={(event) => updateAnswer("need", event.target.value)}
-                  className="w-full rounded-[8px] border border-[#D9CFBF] bg-white px-4 py-3 text-sm font-bold text-[#111111] outline-none transition focus:border-[#0F5132]"
-                  required
-                >
-                  <option value="">카테고리를 선택해주세요</option>
-                  {expertCategories.map((category) => (
-                    <option key={category.label} value={category.label}>
-                      {category.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="grid gap-2">
-                <span className="text-sm font-black text-[#111111]">
-                  현재 가장 큰 고민은?
-                </span>
-                <textarea
                   value={answers.concern}
                   onChange={(event) =>
                     updateAnswer("concern", event.target.value)
                   }
-                  rows={3}
-                  placeholder="예: 어깨 통증과 체형 불균형이 반복됩니다."
-                  className="w-full resize-none rounded-[8px] border border-[#D9CFBF] bg-white px-4 py-3 text-sm font-bold text-[#111111] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#0F5132]"
+                  className="w-full rounded-[8px] border border-[#D9CFBF] bg-white px-4 py-3 text-sm font-bold text-[#111111] outline-none transition focus:border-[#0F5132]"
                   required
-                />
-              </label>
-
-              <label className="grid gap-2">
-                <span className="text-sm font-black text-[#111111]">목표는?</span>
-                <input
-                  value={answers.goal}
-                  onChange={(event) => updateAnswer("goal", event.target.value)}
-                  placeholder="예: 체형교정과 통증 없는 운동 루틴 만들기"
-                  className="w-full rounded-[8px] border border-[#D9CFBF] bg-white px-4 py-3 text-sm font-bold text-[#111111] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#0F5132]"
-                  required
-                />
+                >
+                  <option value="">고민을 선택해주세요</option>
+                  {concernOptions.map((concern) => (
+                    <option key={concern} value={concern}>
+                      {concern}
+                    </option>
+                  ))}
+                </select>
               </label>
 
               <label className="grid gap-2">
                 <span className="text-sm font-black text-[#111111]">
-                  예산 범위는?
+                  운동 경험
                 </span>
                 <select
-                  value={answers.budget}
-                  onChange={(event) => updateAnswer("budget", event.target.value)}
+                  value={answers.experience}
+                  onChange={(event) =>
+                    updateAnswer("experience", event.target.value)
+                  }
                   className="w-full rounded-[8px] border border-[#D9CFBF] bg-white px-4 py-3 text-sm font-bold text-[#111111] outline-none transition focus:border-[#0F5132]"
                   required
                 >
-                  <option value="">예산 범위를 선택해주세요</option>
-                  {budgetOptions.map((budget) => (
-                    <option key={budget} value={budget}>
-                      {budget}
+                  <option value="">운동 경험을 선택해주세요</option>
+                  {experienceOptions.map((experience) => (
+                    <option key={experience} value={experience}>
+                      {experience}
                     </option>
                   ))}
                 </select>
+              </label>
+
+              <label className="grid gap-2">
+                <span className="text-sm font-black text-[#111111]">
+                  원하는 목표
+                </span>
+                <input
+                  value={answers.goal}
+                  onChange={(event) => updateAnswer("goal", event.target.value)}
+                  placeholder="예: 통증 없이 운동 루틴 만들기"
+                  className="w-full rounded-[8px] border border-[#D9CFBF] bg-white px-4 py-3 text-sm font-bold text-[#111111] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#0F5132]"
+                  required
+                />
               </label>
 
               <label className="grid gap-2">
@@ -605,6 +569,25 @@ export default function MatchPage() {
                   className="w-full rounded-[8px] border border-[#D9CFBF] bg-white px-4 py-3 text-sm font-bold text-[#111111] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#0F5132]"
                 />
               </label>
+
+              <label className="grid gap-2">
+                <span className="text-sm font-black text-[#111111]">
+                  상담 방식
+                </span>
+                <select
+                  value={answers.method}
+                  onChange={(event) => updateAnswer("method", event.target.value)}
+                  className="w-full rounded-[8px] border border-[#D9CFBF] bg-white px-4 py-3 text-sm font-bold text-[#111111] outline-none transition focus:border-[#0F5132]"
+                  required
+                >
+                  <option value="">상담 방식을 선택해주세요</option>
+                  {methodOptions.map((method) => (
+                    <option key={method} value={method}>
+                      {method}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
 
             <button
@@ -612,7 +595,7 @@ export default function MatchPage() {
               disabled={loadingExperts}
               className="mt-6 w-full rounded-full bg-[#0F5132] px-6 py-4 text-sm font-black text-white shadow-[0_14px_40px_rgba(15,81,50,0.20)] transition hover:bg-[#146C43] disabled:cursor-not-allowed disabled:bg-[#9CA3AF]"
             >
-              {loadingExperts ? "전문가 데이터를 불러오는 중" : "AI 매칭 시작하기"}
+              {loadingExperts ? "전문가 데이터를 불러오는 중" : "전문가 찾기"}
             </button>
             {saveState ? (
               <p className="mt-3 text-sm font-bold text-[#0F5132]">{saveState}</p>
@@ -624,22 +607,21 @@ export default function MatchPage() {
               Matching logic
             </p>
             <h2 className="mt-3 text-3xl font-black text-[#111111]">
-              점수는 이렇게 계산됩니다.
+              이런 기준으로 추천합니다.
             </h2>
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
               {[
-                ["카테고리 일치", "30점"],
-                ["지역 일치", "20점"],
-                ["전문 분야 일치", "20점"],
-                ["평점", "15점"],
-                ["프로필 완성도", "15점"],
+                ["고민 키워드", "specialty·description"],
+                ["지역 적합도", "선호 지역 반영"],
+                ["상담 방식", "센터/온라인/방문"],
+                ["Premium", "소폭 가산"],
               ].map(([label, score]) => (
                 <div
                   key={label}
                   className="rounded-[8px] border border-[#E5E7EB] bg-[#FBFAF7] p-4"
                 >
                   <p className="text-sm font-black text-[#111111]">{label}</p>
-                  <p className="mt-2 text-3xl font-black text-[#0F5132]">
+                  <p className="mt-2 text-base font-black leading-6 text-[#0F5132]">
                     {score}
                   </p>
                 </div>
@@ -647,158 +629,158 @@ export default function MatchPage() {
             </div>
             <div className="mt-6 rounded-[8px] bg-[#111111] p-5 text-white">
               <p className="text-xs font-black uppercase tracking-[0.18em] text-white">
-                Answer storage
+                Verified only
               </p>
               <p className="mt-3 text-sm font-bold leading-7 text-white">
-                제출한 답변은 현재 브라우저에 저장되어 다음 상담 요청이나
-                리포트 개선에 활용할 수 있도록 준비했습니다.
+                승인 완료된 전문가만 추천합니다. 결과 카드에서 바로 프로필을
+                확인하거나 무료 상담 신청을 시작할 수 있습니다.
               </p>
             </div>
           </div>
         </section>
 
-        {submittedAnswers && bestResult ? (
-          <>
-            <section className="mt-8 grid gap-4 md:grid-cols-3">
-              <div className="rounded-[8px] border border-[#E5E7EB] bg-white p-5 shadow-sm">
-                <p className="text-xs font-black uppercase tracking-[0.16em] text-[#0F5132]">
-                  사용자의 목표
-                </p>
-                <p className="mt-3 text-xl font-black leading-7">
-                  {submittedAnswers.goal}
-                </p>
-              </div>
-              <div className="rounded-[8px] border border-[#E5E7EB] bg-white p-5 shadow-sm">
-                <p className="text-xs font-black uppercase tracking-[0.16em] text-[#0F5132]">
-                  현재 상태 요약
-                </p>
-                <p className="mt-3 text-sm font-bold leading-7 text-[#374151]">
-                  {submittedAnswers.concern}
-                </p>
-              </div>
-              <div className="rounded-[8px] border border-[#E5E7EB] bg-[#111111] p-5 text-white shadow-sm">
-                <p className="text-xs font-black uppercase tracking-[0.16em] text-white">
-                  Match confidence
-                </p>
-                <p className="mt-3 text-5xl font-black">{bestResult.score}%</p>
-                <p className="mt-2 text-sm font-bold leading-6 text-white">
-                  {bestResult.category} 분야에서 가장 높은 적합도를 보입니다.
-                </p>
-              </div>
-            </section>
-
-            <section className="mt-5 grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
-              <div className="rounded-[8px] border border-[#E5E7EB] bg-white p-6 shadow-[0_22px_70px_rgba(30,28,24,0.08)] sm:p-8">
+        {submittedAnswers && results.length > 0 ? (
+          <section className="mt-8 rounded-[8px] border border-[#E5E7EB] bg-white p-5 shadow-[0_24px_80px_rgba(30,28,24,0.08)] sm:p-7">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+              <div>
                 <p className="text-xs font-black uppercase tracking-[0.18em] text-[#0F5132]">
-                  AI 분석 결과
+                  Recommended experts
                 </p>
-                <h2 className="mt-3 text-3xl font-black tracking-normal">
-                  {submittedAnswers.need} 전문가 중 실행 가능성이 높은 조합입니다.
+                <h2 className="mt-3 text-3xl font-black text-[#111111] sm:text-4xl">
+                  회원님의 고민과 목표에 맞는 전문가를 추천했어요.
                 </h2>
-                <p className="mt-5 text-base font-bold leading-8 text-[#374151]">
-                  예산은 {submittedAnswers.budget}, 선호 지역은{" "}
-                  {submittedAnswers.region || "무관"}으로 입력되었습니다. 현재
-                  고민과 목표를 기준으로 전문 분야 키워드가 잘 맞고, 평점과
-                  프로필 완성도가 높은 전문가를 우선 추천했습니다.
+                <p className="mt-4 max-w-3xl text-base font-bold leading-8 text-[#374151]">
+                  {submittedAnswers.concern} 고민과 “{submittedAnswers.goal}”
+                  목표를 기준으로 추천했습니다. 운동 경험은{" "}
+                  {submittedAnswers.experience}, 상담 방식은{" "}
+                  {submittedAnswers.method}으로 반영했습니다.
                 </p>
-                <div className="mt-6 rounded-[8px] bg-[#FBFAF7] p-5">
-                  <p className="text-xs font-black uppercase tracking-[0.16em] text-[#0F5132]">
-                    추천 이유
-                  </p>
-                  <p className="mt-3 text-lg font-black leading-8">
-                    {bestResult.reason}
-                  </p>
-                </div>
               </div>
+              <Link
+                href="/experts"
+                className="inline-flex shrink-0 justify-center rounded-full border border-[#D9CFBF] bg-[#F5F1E8] px-5 py-3 text-sm font-black text-[#0F5132] transition hover:border-[#0F5132]"
+              >
+                전체 전문가 보기
+              </Link>
+            </div>
 
-              <div className="rounded-[8px] border border-[#E5E7EB] bg-white p-4 shadow-[0_22px_70px_rgba(30,28,24,0.08)] sm:p-5">
-                <div className="mb-4 flex items-end justify-between gap-4 px-1">
-                  <div>
-                    <p className="text-xs font-black uppercase tracking-[0.18em] text-[#0F5132]">
-                      Top 3 experts
-                    </p>
-                    <h2 className="mt-2 text-2xl font-black">
-                      적합한 전문가 TOP3
-                    </h2>
-                  </div>
-                  <span className="rounded-full bg-[#F5F1E8] px-3 py-2 text-xs font-black text-[#374151]">
-                    AI 추천
-                  </span>
-                </div>
+            <div className="mt-7 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+              {results.map((expert, index) => (
+                <article
+                  key={expert.id}
+                  className="overflow-hidden rounded-[8px] border border-[#E5E7EB] bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-[0_22px_60px_rgba(30,28,24,0.12)]"
+                >
+                  <Link
+                    href={`/experts/${expert.id}`}
+                    className="relative block aspect-[4/3] bg-[#EBE7DF]"
+                  >
+                    <Image
+                      src={expert.photoUrl}
+                      alt={expert.name}
+                      fill
+                      unoptimized
+                      sizes="(max-width: 768px) 100vw, 33vw"
+                      className="object-cover"
+                    />
+                    <div className="absolute left-4 top-4 flex flex-wrap gap-2">
+                      <span className="rounded-full bg-white px-3 py-1.5 text-xs font-black text-[#111111] shadow-sm">
+                        추천 {index + 1}
+                      </span>
+                      <span className="rounded-full bg-[#0F5132] px-3 py-1.5 text-xs font-black text-white shadow-sm">
+                        VERIFIED
+                      </span>
+                      {expert.planType === "premium" ? (
+                        <span className="rounded-full bg-[#111111] px-3 py-1.5 text-xs font-black text-white shadow-sm">
+                          Premium
+                        </span>
+                      ) : null}
+                    </div>
+                  </Link>
 
-                <div className="grid gap-3">
-                  {results.map((expert, index) => (
-                    <article
-                      key={expert.id}
-                      className="grid gap-4 rounded-[8px] border border-[#E5E7EB] bg-[#FBFAF7] p-4 sm:grid-cols-[96px_minmax(0,1fr)_80px] sm:items-center"
-                    >
-                      <Link
-                        href={`/experts/${expert.id}`}
-                        className="relative h-24 w-24 overflow-hidden rounded-[8px] bg-[#EBE7DF]"
-                      >
-                        <Image
-                          src={expert.photoUrl}
-                          alt={expert.name}
-                          fill
-                          unoptimized
-                          sizes="96px"
-                          className="object-cover"
-                        />
-                      </Link>
-
+                  <div className="p-5">
+                    <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-[#111111]">
-                            TOP {index + 1}
-                          </span>
-                          <span className="rounded-full bg-[#FFF1EC] px-3 py-1 text-xs font-black text-[#D65339]">
-                            {expert.category}
-                          </span>
-                          {expert.planType === "premium" ? (
-                            <span className="rounded-full bg-[#111111] px-3 py-1 text-xs font-black text-white">
-                              PREMIUM
-                            </span>
-                          ) : null}
-                        </div>
                         <Link href={`/experts/${expert.id}`}>
-                          <h3 className="mt-3 text-xl font-black text-[#111111]">
+                          <h3 className="truncate text-2xl font-black text-[#111111]">
                             {expert.name}
                           </h3>
                         </Link>
                         <p className="mt-1 text-sm font-black text-[#374151]">
-                          {expert.profession} · {expert.location}
+                          {expert.profession}
                         </p>
-                        <p className="mt-3 text-sm font-bold leading-6 text-[#4B5563]">
-                          {expert.reason}
-                        </p>
-                        <div className="mt-4 flex flex-wrap gap-2 text-xs font-black text-[#374151]">
-                          <span className="rounded-full bg-white px-3 py-2">
-                            ★ {expert.rating.toFixed(1)}
-                          </span>
-                          <span className="rounded-full bg-white px-3 py-2">
-                            후기 {expert.reviewCount}개
-                          </span>
-                          <span className="rounded-full bg-white px-3 py-2">
-                            완성도 {expert.completenessScore}%
-                          </span>
-                        </div>
                       </div>
+                      <span className="shrink-0 rounded-full bg-[#E8F2EC] px-3 py-1.5 text-xs font-black text-[#0F5132]">
+                        추천 점수 {expert.score}
+                      </span>
+                    </div>
 
-                      <div className="flex items-center justify-between gap-3 sm:block">
-                        <ScoreRing score={expert.score} />
-                        <Link
-                          href={`/experts/${expert.id}`}
-                          className="text-sm font-black text-[#0F5132] underline underline-offset-4 sm:mt-2 sm:block sm:text-center"
-                        >
-                          상세보기
-                        </Link>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              </div>
-            </section>
-          </>
+                    <div className="mt-4 grid gap-2 text-sm font-bold text-[#374151]">
+                      <p>지역: {expert.location}</p>
+                      <p>경력: {expert.career}</p>
+                    </div>
+
+                    <div className="mt-5 rounded-[8px] bg-[#FBFAF7] p-4">
+                      <p className="text-xs font-black uppercase tracking-[0.14em] text-[#0F5132]">
+                        추천 이유
+                      </p>
+                      <p className="mt-2 text-sm font-bold leading-6 text-[#374151]">
+                        {expert.reason}
+                      </p>
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap gap-2 text-xs font-black text-[#374151]">
+                      <span className="rounded-full border border-[#E5E7EB] px-3 py-2">
+                        ★ {expert.rating.toFixed(1)}
+                      </span>
+                      <span className="rounded-full border border-[#E5E7EB] px-3 py-2">
+                        후기 {expert.reviewCount}개
+                      </span>
+                      <span className="rounded-full border border-[#E5E7EB] px-3 py-2">
+                        {expert.distance}
+                      </span>
+                    </div>
+
+                    <div className="mt-5 grid gap-2">
+                      <Link
+                        href={`/experts/${expert.id}`}
+                        className="inline-flex w-full justify-center rounded-full border border-[#D9CFBF] bg-white px-5 py-3 text-sm font-black text-[#111111] transition hover:border-[#111111]"
+                      >
+                        프로필 보기
+                      </Link>
+                      <ConsultationRequestFlow
+                        expertId={expert.id}
+                        expertName={expert.name}
+                        triggerLabel="상담 신청"
+                        triggerClassName="block w-full rounded-full bg-[#0F5132] px-5 py-3 text-center text-sm font-black text-white transition hover:bg-[#146C43]"
+                      />
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        {submittedAnswers && results.length === 0 ? (
+          <section className="mt-8 rounded-[8px] border border-[#E5E7EB] bg-white p-6 text-center shadow-[0_24px_80px_rgba(30,28,24,0.08)] sm:p-8">
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-[#0F5132]">
+              No exact match
+            </p>
+            <h2 className="mt-3 text-3xl font-black text-[#111111]">
+              조건을 넓혀 다시 추천해보세요.
+            </h2>
+            <p className="mx-auto mt-4 max-w-2xl text-base font-bold leading-8 text-[#374151]">
+              현재 입력한 고민, 지역, 상담 방식에 정확히 맞는 전문가가
+              부족합니다. 지역을 넓히거나 상담 방식을 “상관없음”으로 변경하면
+              더 많은 전문가를 추천받을 수 있습니다.
+            </p>
+            <Link
+              href="/experts"
+              className="mt-6 inline-flex rounded-full bg-[#0F5132] px-6 py-3 text-sm font-black text-white transition hover:bg-[#146C43]"
+            >
+              전체 전문가 보기
+            </Link>
+          </section>
         ) : null}
       </div>
     </main>

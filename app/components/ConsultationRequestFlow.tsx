@@ -91,11 +91,13 @@ export default function ConsultationRequestFlow({
   expertName,
   variant = "modal",
   triggerClassName,
+  triggerLabel = "Request Consultation",
 }: {
   expertId?: number | null;
   expertName?: string;
   variant?: RequestFlowVariant;
   triggerClassName?: string;
+  triggerLabel?: string;
 }) {
   const [open, setOpen] = useState(variant === "embedded");
   const [step, setStep] = useState(0);
@@ -531,7 +533,7 @@ export default function ConsultationRequestFlow({
           "rounded-full bg-white px-5 py-4 text-center text-sm font-black text-[#111111] transition hover:bg-[#f7f3ea]"
         }
       >
-        Request Consultation
+        {triggerLabel}
       </button>
       {open ? (
         <div className="fixed inset-0 z-50 grid place-items-end bg-[#111111]/45 p-0 backdrop-blur-sm sm:place-items-center sm:p-6">

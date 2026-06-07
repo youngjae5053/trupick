@@ -444,10 +444,10 @@ export default function HomePage() {
                 검증 기준 보기
               </Link>
               <Link
-                href="/match"
+                href="/experts"
                 className="rounded-full border border-[#D9CFBF] bg-white px-7 py-4 text-center text-sm font-black text-[#111111] transition hover:border-[#111111]"
               >
-                AI 매칭 시작하기
+                전문가 찾기
               </Link>
             </div>
           </div>

@@ -598,11 +598,11 @@ function ExpertsDiscoveryContent({
                 Search paths
               </p>
               <h2 className="mt-2 text-3xl font-black text-[#111111]">
-                전문가를 찾는 2가지 방법
+                전문가 찾기
               </h2>
             </div>
               <p className="max-w-md text-sm font-bold leading-6 text-[#4B5563]">
-              직접 조건을 고르거나, 내 통증과 운동 경험을 바탕으로 AI 추천을 받을 수 있습니다.
+              조건을 직접 고르거나 요청을 입력해 내 상황에 맞는 운동 전문가를 찾을 수 있습니다.
             </p>
           </div>
 
@@ -642,21 +642,20 @@ function ExpertsDiscoveryContent({
               </p>
               <ul className="mt-4 grid gap-2 text-sm font-bold text-[#111111]">
                 <li>✓ 통증 부위와 운동 목표 기반 추천</li>
-                <li>✓ 적합도 기반 TOP 3 추천</li>
+                <li>✓ 적합도 기반 전문가 3~5명 추천</li>
                 <li>✓ 매칭 이유와 함께 확인 가능</li>
               </ul>
               <Link
                 href="/match"
                 className="mt-5 inline-flex rounded-full bg-[#6D28D9] px-5 py-3 text-sm font-black text-white transition hover:bg-[#5B21B6]"
               >
-                AI 매칭 시작하기
+                맞춤 전문가 찾기
               </Link>
             </article>
           </div>
 
           <div className="mt-4 rounded-[8px] border border-[#E5E7EB] bg-white px-4 py-3 text-sm font-bold leading-6 text-[#374151]">
-            직접 검색과 AI 매칭을 명확히 분리하여 상황에 맞게 선택할 수
-            있도록 개선했습니다.
+            TRUPICK의 전문가 찾기는 직접 검색과 요청 기반 추천을 하나의 탐색 흐름으로 연결합니다.
           </div>
         </section>
 
