@@ -471,8 +471,10 @@ function mapApprovedExperts(
 
 function ExpertsDiscoveryContent({
   initialCategory,
+  initialQuery,
 }: {
   initialCategory: ExpertCategory | null;
+  initialQuery: string;
 }) {
   const [experts, setExperts] = useState<ExpertDiscoveryProfile[]>([]);
   const [activeCategory] = useState<ExpertCategory>(
@@ -481,7 +483,7 @@ function ExpertsDiscoveryContent({
   const [activeSubcategory, setActiveSubcategory] = useState("전체");
   const [selectedExpertId, setSelectedExpertId] = useState<number | null>(null);
   const [locationSearch, setLocationSearch] = useState("");
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(initialQuery);
   const [maxDistanceFilter, setMaxDistanceFilter] = useState(10_000);
   const [recommendationField, setRecommendationField] = useState("통증관리");
   const [situation, setSituation] = useState("");
@@ -647,7 +649,7 @@ function ExpertsDiscoveryContent({
             href="/how-we-verify"
             className="rounded-full border border-[#ddd8ce] bg-white px-4 py-2 text-sm font-bold text-[#31312d] shadow-sm transition hover:border-[#161616]"
           >
-            검증 기준
+            Standards
           </Link>
         </header>
 
@@ -1211,16 +1213,18 @@ function ExpertsDiscoveryContent({
 function ExpertsSearchParamBoundary() {
   const searchParams = useSearchParams();
   const requestedCategory = searchParams.get("category");
+  const initialQuery = searchParams.get("q") ?? "";
   const initialCategory = isExpertCategory(requestedCategory)
     ? requestedCategory
     : null;
 
   return (
     <ExpertsDiscoveryContent
-      key={initialCategory === fitnessCategory ? initialCategory : fitnessCategory}
+      key={`${initialCategory === fitnessCategory ? initialCategory : fitnessCategory}-${initialQuery}`}
       initialCategory={
         initialCategory === fitnessCategory ? initialCategory : fitnessCategory
       }
+      initialQuery={initialQuery}
     />
   );
 }

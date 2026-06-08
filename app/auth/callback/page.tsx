@@ -3,44 +3,106 @@
 import Link from "next/link";
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { getFriendlyErrorMessage } from "@/app/errorMessages";
 import { getSupabaseBrowserClient } from "@/app/supabaseBrowser";
+
+function buildOAuthErrorMessage({
+  error,
+  errorCode,
+  errorDescription,
+}: {
+  error: string | null;
+  errorCode: string | null;
+  errorDescription: string | null;
+}) {
+  return [
+    errorDescription ? `error_description: ${errorDescription}` : "",
+    errorCode ? `error_code: ${errorCode}` : "",
+    error ? `error: ${error}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
 
 function AuthCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [message, setMessage] = useState("Google 계정 로그인을 확인하고 있습니다.");
+  const [message, setMessage] = useState("소셜 로그인을 처리하고 있습니다.");
   const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
     let isMounted = true;
 
-    async function handleOAuthCallback() {
-      const supabase = getSupabaseBrowserClient();
+    async function handleCallback() {
+      const code = searchParams.get("code");
+      const oauthError = searchParams.get("error");
+      const oauthErrorCode = searchParams.get("error_code");
+      const oauthErrorDescription = searchParams.get("error_description");
 
-      if (!supabase) {
-        setErrorMessage("Supabase 환경 변수를 확인해주세요.");
+      if (oauthError || oauthErrorCode || oauthErrorDescription) {
+        const actualError = buildOAuthErrorMessage({
+          error: oauthError,
+          errorCode: oauthErrorCode,
+          errorDescription: oauthErrorDescription,
+        });
+
+        console.error("OAuth callback error", {
+          error: oauthError,
+          error_code: oauthErrorCode,
+          error_description: oauthErrorDescription,
+        });
+
+        if (isMounted) {
+          setErrorMessage(actualError || "소셜 로그인 중 오류가 발생했습니다.");
+        }
         return;
       }
 
-      const code = searchParams.get("code");
+      if (!code) {
+        console.error("OAuth callback code is missing", {
+          search: window.location.search,
+        });
 
-      if (code) {
-        const { error } = await supabase.auth.exchangeCodeForSession(code);
-
-        if (error) {
-          if (isMounted) {
-            setErrorMessage(getFriendlyErrorMessage(error.message));
-          }
-          return;
+        if (isMounted) {
+          setErrorMessage("OAuth code가 없습니다. 다시 로그인해주세요.");
         }
+        return;
       }
 
-      const { data: userData, error: userError } = await supabase.auth.getUser();
+      let supabase: ReturnType<typeof getSupabaseBrowserClient>;
 
-      if (userError || !userData.user) {
+      try {
+        supabase = getSupabaseBrowserClient();
+      } catch (error) {
+        console.error("Supabase browser client creation failed", error);
+
         if (isMounted) {
-          setErrorMessage("로그인 세션을 확인하지 못했습니다. 다시 로그인해주세요.");
+          setErrorMessage(
+            error instanceof Error
+              ? error.message
+              : "Supabase 브라우저 클라이언트를 생성하지 못했습니다."
+          );
+        }
+        return;
+      }
+
+      const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+
+      if (error) {
+        console.error("exchangeCodeForSession error", error);
+
+        if (isMounted) {
+          setErrorMessage(error.message);
+        }
+        return;
+      }
+
+      const user = data.session?.user ?? data.user ?? null;
+
+      if (!user) {
+        console.error("OAuth session exchange succeeded but user is missing", data);
+
+        if (isMounted) {
+          setErrorMessage("로그인 사용자를 확인하지 못했습니다. 다시 로그인해주세요.");
         }
         return;
       }
@@ -49,25 +111,29 @@ function AuthCallbackContent() {
         setMessage("회원 정보를 확인하고 있습니다.");
       }
 
-      const { data: profile } = await supabase
+      const { data: profile, error: profileError } = await supabase
         .from("profiles")
         .select("id")
-        .eq("id", userData.user.id)
+        .eq("id", user.id)
         .maybeSingle<{ id: string }>();
+
+      if (profileError) {
+        console.error("profiles lookup error", profileError);
+
+        if (isMounted) {
+          setErrorMessage(profileError.message);
+        }
+        return;
+      }
 
       if (!isMounted) {
         return;
       }
 
-      if (!profile) {
-        router.replace("/onboarding");
-        return;
-      }
-
-      router.replace("/mypage");
+      router.replace(profile ? "/mypage" : "/onboarding");
     }
 
-    void handleOAuthCallback();
+    void handleCallback();
 
     return () => {
       isMounted = false;
@@ -75,7 +141,7 @@ function AuthCallbackContent() {
   }, [router, searchParams]);
 
   return (
-    <main className="min-h-screen bg-[#F5F1E8] px-4 py-10 text-[#111111]">
+    <main className="min-h-screen bg-[#F6F3EC] px-4 py-10 text-[#111111]">
       <section className="mx-auto max-w-lg rounded-[8px] border border-[#E5E7EB] bg-white p-6 text-center shadow-[0_24px_80px_rgba(24,24,20,0.08)] sm:p-8">
         <p className="text-sm font-black uppercase tracking-[0.18em] text-[#0F5132]">
           OAuth Callback
@@ -83,7 +149,7 @@ function AuthCallbackContent() {
         <h1 className="mt-3 text-3xl font-black text-[#111111]">
           로그인 처리 중
         </h1>
-        <p className="mt-4 text-sm font-bold leading-7 text-[#374151]">
+        <p className="mt-4 whitespace-pre-line text-sm font-bold leading-7 text-[#374151]">
           {errorMessage || message}
         </p>
         {errorMessage ? (
@@ -103,7 +169,7 @@ export default function AuthCallbackPage() {
   return (
     <Suspense
       fallback={
-        <main className="min-h-screen bg-[#F5F1E8] px-4 py-10 text-[#111111]">
+        <main className="min-h-screen bg-[#F6F3EC] px-4 py-10 text-[#111111]">
           <section className="mx-auto max-w-lg rounded-[8px] border border-[#E5E7EB] bg-white p-6 text-center shadow-sm">
             <p className="text-sm font-black text-[#374151]">
               로그인 정보를 확인하고 있습니다.

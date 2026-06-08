@@ -144,7 +144,7 @@ const faqItems = [
       "아닙니다. TRUPICK은 검증된 정보를 제공하지만, 실제 결과는 전문가와 고객의 상황에 따라 달라질 수 있습니다.",
   },
   {
-    question: "검증 기준은 계속 바뀌나요?",
+    question: "전문가 선별 원칙은 계속 바뀌나요?",
     answer:
       "네. 사용자 피드백, 후기, 상담 품질 데이터를 바탕으로 지속적으로 개선합니다.",
   },
@@ -191,10 +191,10 @@ export default function HowWeVerifyPage() {
       <section className="mx-auto grid w-full max-w-7xl gap-8 px-4 pb-14 pt-8 sm:px-6 lg:grid-cols-[minmax(0,1fr)_380px] lg:px-8 lg:pb-24 lg:pt-16">
         <div>
           <p className="text-sm font-black uppercase tracking-[0.22em] text-[#0F5132]">
-            TRUPICK VERIFICATION STANDARD
+            TRUPICK STANDARDS
           </p>
           <h1 className="mt-5 max-w-4xl text-[clamp(2.6rem,12vw,5.4rem)] font-black leading-[1.02] tracking-normal text-[#111111] sm:tracking-[-0.04em]">
-            검증된 전문가의 기준을 만듭니다.
+            검증된 전문가를 선별하는 원칙을 만듭니다.
           </h1>
           <p className="mt-6 max-w-3xl whitespace-pre-line text-lg font-bold leading-8 text-[#374151] sm:text-xl sm:leading-9">
             {`TRUPICK은 단순히 프로필을 등록한 전문가를 보여주지 않습니다.
@@ -209,7 +209,7 @@ export default function HowWeVerifyPage() {
               현재 베타는 운동/재활 전문가를 중심으로 운영됩니다.
             </p>
             <p className="mt-2 text-sm font-bold leading-7 text-[#374151]">
-              재활운동, 통증관리, 체형교정, 다이어트, 근력향상 전문가의 검증 기준을 먼저 고도화한 뒤 다른 분야로 확장할 예정입니다.
+              재활운동, 통증관리, 체형교정, 다이어트, 근력향상 전문가의 선별 원칙을 먼저 고도화한 뒤 다른 분야로 확장할 예정입니다.
             </p>
           </div>
           <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:flex-wrap">

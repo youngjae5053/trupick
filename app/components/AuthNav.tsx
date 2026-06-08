@@ -95,7 +95,7 @@ export default function AuthNav() {
         style={secondaryMobileLinkStyle}
         className="hidden sm:inline"
       >
-        검증 기준
+        Standards
       </Link>
       <Link
         href="/become-expert"

@@ -2,7 +2,8 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import AuthNav from "@/app/components/AuthNav";
 import {
   ExpertDiscoveryProfile,
@@ -58,8 +59,10 @@ const standards = [
 const storyPoints = [
   "TRUPICK은 단순히 많은 전문가를 보여주는 서비스가 아닙니다.",
   "고객의 몸과 시간에 직접 영향을 주는 운동/재활 영역에서 신뢰할 수 있는 선택지를 만드는 것이 목표입니다.",
-  "검증 기준, 실제 후기, 거리 기반 탐색을 통해 더 적은 고민으로 더 나은 전문가를 만날 수 있게 돕습니다.",
+  "전문가 선별 원칙, 실제 후기, 거리 기반 탐색을 통해 더 적은 고민으로 더 나은 전문가를 만날 수 있게 돕습니다.",
 ];
+
+const searchTags = ["어깨 통증", "체형교정", "다이어트", "재활운동", "러닝", "근력향상"];
 
 function isFitnessExpert(expert: {
   specialty?: string | null;
@@ -135,11 +138,13 @@ function toLandingExperts(
 }
 
 export default function HomePage() {
+  const router = useRouter();
   const [experts, setExperts] = useState<Expert[]>([]);
   const [fallbackExperts, setFallbackExperts] = useState<ExpertDiscoveryProfile[]>(
     []
   );
   const [reviewStats, setReviewStats] = useState<ReviewStats>({});
+  const [heroSearch, setHeroSearch] = useState("");
 
   useEffect(() => {
     let isMounted = true;
@@ -207,45 +212,87 @@ export default function HomePage() {
 
   const mapExperts = featuredExperts.length > 0 ? featuredExperts : [];
 
+  function submitHeroSearch(event?: FormEvent<HTMLFormElement>) {
+    event?.preventDefault();
+    const query = heroSearch.trim();
+    router.push(query ? `/experts?q=${encodeURIComponent(query)}` : "/experts");
+  }
+
   return (
     <main className="min-h-screen bg-[#F6F3EC] text-[#111111]">
       <header className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-5 sm:flex-nowrap sm:px-6 lg:px-8">
         <Link
           href="/"
-          className="text-lg font-extrabold tracking-[0.16em] text-[#111111]"
+          className="inline-flex items-center gap-3 text-lg font-extrabold tracking-[0.16em] text-[#111111]"
         >
-          TRUPICK
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#0F5132] text-sm font-black text-white">
+            ✓
+          </span>
+          <span>TRUPICK</span>
         </Link>
         <AuthNav />
       </header>
 
-      <section className="mx-auto flex min-h-[calc(100vh-88px)] w-full max-w-7xl flex-col justify-center px-4 py-16 sm:px-6 lg:px-8">
+      <section className="mx-auto flex min-h-[calc(100vh-88px)] w-full max-w-7xl flex-col justify-center px-4 py-14 sm:px-6 lg:px-8">
         <div className="max-w-4xl">
           <p className="text-sm font-black uppercase tracking-[0.28em] text-[#0F5132]">
             PREMIUM VERIFIED NETWORK
           </p>
-          <h1 className="mt-6 max-w-4xl text-[clamp(3rem,9vw,6.4rem)] font-black leading-[0.98] tracking-normal text-[#111111] sm:tracking-[-0.045em]">
-            검증된 전문가를
+          <h1 className="mt-6 max-w-4xl text-[clamp(2.6rem,7vw,4.8rem)] font-extrabold leading-[1.04] tracking-normal text-[#111111] sm:tracking-[-0.035em]">
+            내게 필요한 전문가,
             <br />
-            쉽고 안전하게 찾으세요
+            TRUPICK이 대신 찾아드립니다.
           </h1>
-          <p className="mt-8 max-w-2xl text-lg font-bold leading-8 text-[#374151] sm:text-xl">
+          <p className="mt-7 max-w-2xl text-lg font-bold leading-8 text-[#374151] sm:text-xl">
             운동 · 재활 · 체형교정 전문가를 경력, 인터뷰, 실제 사례를
-            기준으로 TRUPICK이 직접 검증합니다.
+            기준으로 선별합니다.
           </p>
 
-          <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+          <form
+            onSubmit={submitHeroSearch}
+            className="mt-9 max-w-3xl rounded-[8px] border border-[#D9CFBF] bg-white p-3 shadow-[0_18px_55px_rgba(24,24,20,0.08)]"
+          >
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <input
+                value={heroSearch}
+                onChange={(event) => setHeroSearch(event.target.value)}
+                placeholder="어떤 전문가가 필요하신가요?"
+                className="min-h-14 flex-1 rounded-[8px] bg-[#F8F6F0] px-5 text-base font-bold text-[#111111] outline-none placeholder:text-[#9CA3AF]"
+              />
+              <button
+                type="submit"
+                className="rounded-[8px] bg-[#0F5132] px-7 py-4 text-sm font-black text-white transition hover:bg-[#146C43]"
+              >
+                검색
+              </button>
+            </div>
+          </form>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            {searchTags.map((tag) => (
+              <button
+                key={tag}
+                type="button"
+                onClick={() => router.push(`/experts?q=${encodeURIComponent(tag)}`)}
+                className="rounded-full border border-[#D9CFBF] bg-white px-4 py-2 text-sm font-black text-[#374151] transition hover:border-[#0F5132] hover:text-[#0F5132]"
+              >
+                {tag}
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
             <Link
-              href="/experts"
+              href="/match"
               className="rounded-full bg-[#0F5132] px-8 py-4 text-center text-base font-black text-white shadow-[0_18px_50px_rgba(15,81,50,0.22)] transition hover:bg-[#146C43]"
             >
-              전문가 찾기
+              전문가 추천받기
             </Link>
             <Link
-              href="/how-we-verify"
+              href="/experts"
               className="rounded-full border border-[#111111] bg-white px-8 py-4 text-center text-base font-black text-[#111111] shadow-sm transition hover:-translate-y-0.5"
             >
-              검증 기준 보기
+              전체 전문가 보기
             </Link>
           </div>
         </div>
@@ -254,11 +301,14 @@ export default function HomePage() {
       <section className="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
         <div className="max-w-3xl">
           <p className="text-sm font-black uppercase tracking-[0.22em] text-[#0F5132]">
-            검증 기준
+            전문가 선별 원칙
           </p>
           <h2 className="mt-4 text-4xl font-black tracking-[-0.03em] text-[#111111] sm:text-6xl">
-            TRUPICK 검증 기준
+            TRUPICK Standards
           </h2>
+          <p className="mt-5 text-lg font-bold leading-8 text-[#374151]">
+            우리는 누구나 전문가로 노출하지 않습니다.
+          </p>
         </div>
 
         <div className="mt-10 grid gap-4 md:grid-cols-4">
@@ -445,7 +495,7 @@ export default function HomePage() {
                 href="/how-we-verify"
                 className="rounded-full bg-[#0F5132] px-7 py-4 text-center text-sm font-black text-white transition hover:bg-[#146C43]"
               >
-                검증 기준 보기
+                Standards 보기
               </Link>
               <Link
                 href="/experts"
@@ -467,7 +517,7 @@ export default function HomePage() {
             <Link href="/experts">Experts</Link>
             <Link href="/become-expert">Become Expert</Link>
             <Link href="/register">Register</Link>
-            <Link href="/how-we-verify">Verification</Link>
+            <Link href="/how-we-verify">Standards</Link>
             <Link href="/feedback">Feedback</Link>
           </nav>
         </div>
