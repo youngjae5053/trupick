@@ -23,6 +23,14 @@ function buildOAuthErrorMessage({
     .join("\n");
 }
 
+function getHashParams() {
+  if (typeof window === "undefined") {
+    return new URLSearchParams();
+  }
+
+  return new URLSearchParams(window.location.hash.replace(/^#/, ""));
+}
+
 function AuthCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -33,7 +41,6 @@ function AuthCallbackContent() {
     let isMounted = true;
 
     async function handleCallback() {
-      const code = searchParams.get("code");
       const oauthError = searchParams.get("error");
       const oauthErrorCode = searchParams.get("error_code");
       const oauthErrorDescription = searchParams.get("error_description");
@@ -57,16 +64,10 @@ function AuthCallbackContent() {
         return;
       }
 
-      if (!code) {
-        console.error("OAuth callback code is missing", {
-          search: window.location.search,
-        });
-
-        if (isMounted) {
-          setErrorMessage("OAuth code가 없습니다. 다시 로그인해주세요.");
-        }
-        return;
-      }
+      const code = searchParams.get("code");
+      const hashParams = getHashParams();
+      const accessToken = hashParams.get("access_token");
+      const refreshToken = hashParams.get("refresh_token");
 
       let supabase: ReturnType<typeof getSupabaseBrowserClient>;
 
@@ -85,16 +86,46 @@ function AuthCallbackContent() {
         return;
       }
 
-      const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+      let authResult:
+        | Awaited<ReturnType<typeof supabase.auth.exchangeCodeForSession>>
+        | Awaited<ReturnType<typeof supabase.auth.setSession>>;
+
+      if (code) {
+        authResult = await supabase.auth.exchangeCodeForSession(code);
+      } else if (accessToken && refreshToken) {
+        authResult = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+      } else {
+        console.error("OAuth callback code and tokens are missing", {
+          search: window.location.search,
+          hash: window.location.hash,
+          hasAccessToken: Boolean(accessToken),
+          hasRefreshToken: Boolean(refreshToken),
+        });
+
+        if (isMounted) {
+          setErrorMessage("OAuth code가 없습니다. 다시 로그인해주세요.");
+        }
+        return;
+      }
+
+      const { data, error } = authResult;
 
       if (error) {
-        console.error("exchangeCodeForSession error", error);
+        console.error(
+          code ? "exchangeCodeForSession error" : "setSession error",
+          error
+        );
 
         if (isMounted) {
           setErrorMessage(error.message);
         }
         return;
       }
+
+      window.history.replaceState(null, "", "/auth/callback");
 
       const user = data.session?.user ?? data.user ?? null;
 
