@@ -7,7 +7,6 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import {
   ExpertDiscoveryProfile,
   getNearbyExperts,
-  mockUserLocation,
 } from "./expertDiscoveryData";
 import {
   ExpertCategory,
@@ -18,6 +17,7 @@ import { getSupabaseBrowserClient } from "@/app/supabaseBrowser";
 import { getProfileCompleteness } from "@/app/profileCompleteness";
 import FavoriteButton from "@/app/components/FavoriteButton";
 import KakaoExpertMap from "@/app/components/KakaoExpertMap";
+import ConsultationRequestFlow from "@/app/components/ConsultationRequestFlow";
 
 type ApprovedExpertRow = {
   id: number;
@@ -30,13 +30,6 @@ type ApprovedExpertRow = {
 
 type ReviewStats = Record<number, { rating: number; reviewCount: number }>;
 
-const distanceRings = [
-  { label: "500m", meters: 500 },
-  { label: "1km", meters: 1000 },
-  { label: "3km", meters: 3000 },
-  { label: "5km", meters: 5000 },
-];
-
 const mapDistanceFilters = [
   { label: "1km 이내", meters: 1000 },
   { label: "3km 이내", meters: 3000 },
@@ -44,8 +37,17 @@ const mapDistanceFilters = [
   { label: "10km 이내", meters: 10000 },
 ];
 
-const maxRadarDistance = 5000;
 const fitnessCategory: ExpertCategory = "운동/재활";
+const recommendationFields = [
+  "통증관리",
+  "재활운동",
+  "체형교정",
+  "다이어트",
+  "근력향상",
+  "러닝",
+  "기타",
+];
+const recommendationMethods = ["센터 방문", "온라인", "방문 상담", "상관없음"];
 
 const subcategoryFilters: Record<ExpertCategory, string[]> = {
   "운동/재활": [
@@ -192,16 +194,6 @@ function formatConsultationMethods(methods: string[]) {
   return methods.map((method) => labels[method] ?? method).join(" / ");
 }
 
-function getMarkerPosition(expert: ExpertDiscoveryProfile) {
-  const radius = Math.min(expert.distanceMeters / maxRadarDistance, 1) * 46;
-  const angle = (expert.bearingDegrees - 90) * (Math.PI / 180);
-
-  return {
-    left: `${50 + Math.cos(angle) * radius}%`,
-    top: `${50 + Math.sin(angle) * radius}%`,
-  };
-}
-
 function sortPremiumFirst(experts: ExpertDiscoveryProfile[]) {
   return [...experts].sort((a, b) => {
     if (a.planType !== b.planType) {
@@ -210,6 +202,147 @@ function sortPremiumFirst(experts: ExpertDiscoveryProfile[]) {
 
     return b.rating - a.rating;
   });
+}
+
+function normalizeSearchText(value: string) {
+  return value.toLowerCase().replace(/\s/g, "");
+}
+
+function buildRecommendationText(expert: ExpertDiscoveryProfile) {
+  return [
+    expert.nickname,
+    expert.profession,
+    expert.category,
+    expert.description,
+    expert.career,
+    expert.location,
+    ...expert.certifications,
+    ...expert.specialtyTags,
+    ...expert.consultationMethods,
+  ].join(" ");
+}
+
+function getRecommendationReason({
+  expert,
+  field,
+  location,
+  method,
+}: {
+  expert: ExpertDiscoveryProfile;
+  field: string;
+  location: string;
+  method: string;
+}) {
+  const locationMatched =
+    location.trim().length > 0 &&
+    normalizeSearchText(expert.location).includes(normalizeSearchText(location));
+  const methodMatched =
+    method === "상관없음" ||
+    expert.consultationMethods.some((item) =>
+      formatConsultationMethods([item]).includes(method)
+    );
+  const fieldLabel = field === "기타" ? "입력한 상황" : field;
+
+  return `${fieldLabel} 요청과 현재 상황 설명을 기준으로 ${expert.profession} 경험을 우선 반영했습니다. ${
+    locationMatched ? "선호 지역과도 잘 맞습니다." : "지역 조건을 넓히면 더 많은 선택지도 볼 수 있습니다."
+  } ${methodMatched ? "선호 상담 방식도 대응 가능합니다." : "상담 방식은 프로필에서 추가 확인해보세요."}`;
+}
+
+function getRecommendations({
+  experts,
+  field,
+  situation,
+  location,
+  method,
+}: {
+  experts: ExpertDiscoveryProfile[];
+  field: string;
+  situation: string;
+  location: string;
+  method: string;
+}) {
+  const situationWords = situation
+    .split(/[\s,./·]+/)
+    .map((word) => word.trim())
+    .filter((word) => word.length >= 2);
+  const fieldKeywords = field === "기타" ? [] : subcategoryKeywords[field] ?? [field];
+
+  return experts
+    .map((expert) => {
+      const normalizedText = normalizeSearchText(buildRecommendationText(expert));
+      const fieldScore = fieldKeywords.some((keyword) =>
+        normalizedText.includes(normalizeSearchText(keyword))
+      )
+        ? 32
+        : 8;
+      const situationScore = Math.min(
+        24,
+        situationWords.filter((word) =>
+          normalizedText.includes(normalizeSearchText(word))
+        ).length * 8
+      );
+      const locationScore =
+        location.trim().length === 0
+          ? 8
+          : normalizeSearchText(expert.location).includes(
+              normalizeSearchText(location)
+            )
+          ? 18
+          : 3;
+      const methodScore =
+        method === "상관없음" ||
+        expert.consultationMethods.some((item) =>
+          formatConsultationMethods([item]).includes(method)
+        )
+          ? 10
+          : 2;
+      const premiumScore = expert.planType === "premium" ? 8 : 0;
+      const ratingScore = Math.min(8, Math.round((expert.rating / 5) * 8));
+      const completenessScore = Math.min(
+        8,
+        Math.round(
+          (getProfileCompleteness({
+            photoUrl: expert.photoUrl,
+            description: expert.description,
+            career: expert.career,
+            certifications: expert.certifications,
+            location: expert.location,
+            consultation_methods: expert.consultationMethods,
+            sns_url: expert.snsUrl,
+            portfolio_url: expert.portfolioUrl,
+          }).score /
+            100) *
+            8
+        )
+      );
+      const recommendationScore =
+        fieldScore +
+        situationScore +
+        locationScore +
+        methodScore +
+        premiumScore +
+        ratingScore +
+        completenessScore;
+
+      return {
+        ...expert,
+        recommendationScore,
+        recommendationReason: getRecommendationReason({
+          expert,
+          field,
+          location,
+          method,
+        }),
+      };
+    })
+    .filter((expert) => expert.recommendationScore >= 34)
+    .sort(
+      (a, b) =>
+        b.recommendationScore - a.recommendationScore ||
+        Number(b.planType === "premium") - Number(a.planType === "premium") ||
+        b.rating - a.rating
+    )
+    .slice(0, 5);
 }
 
 function matchesSubcategory(
@@ -347,10 +480,21 @@ function ExpertsDiscoveryContent({
   );
   const [activeSubcategory, setActiveSubcategory] = useState("전체");
   const [selectedExpertId, setSelectedExpertId] = useState<number | null>(null);
-  const [locationLabel, setLocationLabel] = useState(mockUserLocation.label);
   const [locationSearch, setLocationSearch] = useState("");
   const [search, setSearch] = useState("");
   const [maxDistanceFilter, setMaxDistanceFilter] = useState(10_000);
+  const [recommendationField, setRecommendationField] = useState("통증관리");
+  const [situation, setSituation] = useState("");
+  const [preferredMethod, setPreferredMethod] = useState("상관없음");
+  const [recommendations, setRecommendations] = useState<
+    Array<
+      ExpertDiscoveryProfile & {
+        recommendationScore: number;
+        recommendationReason: string;
+      }
+    >
+  >([]);
+  const [recommendationRequested, setRecommendationRequested] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -460,27 +604,19 @@ function ExpertsDiscoveryContent({
     filteredExperts[0] ??
     null;
 
-  function useDeviceLocation() {
-    if (!navigator.geolocation) {
-      setLocationLabel("Current location");
-      return;
-    }
+  function requestRecommendations() {
+    const nextRecommendations = getRecommendations({
+      experts,
+      field: recommendationField,
+      situation,
+      location: locationSearch,
+      method: preferredMethod,
+    });
 
-    navigator.geolocation.getCurrentPosition(
-      () => setLocationLabel("Using your current location"),
-      () => setLocationLabel("Current location")
-    );
-  }
-
-  function applyLocationSearch() {
-    const nextLocation = locationSearch.trim();
-
-    if (!nextLocation) {
-      setLocationLabel(mockUserLocation.label);
-      return;
-    }
-
-    setLocationLabel(`${nextLocation} 기준`);
+    setRecommendationRequested(true);
+    setRecommendations(nextRecommendations);
+    setActiveSubcategory(recommendationField === "기타" ? "전체" : recommendationField);
+    setSearch(situation);
   }
 
   const selectExpert = useCallback((expert: ExpertDiscoveryProfile) => {
@@ -492,13 +628,13 @@ function ExpertsDiscoveryContent({
         expert_id: expert.id,
         expert_name: expert.nickname,
         category: expert.category,
-        source: "radar_marker",
+        source: "expert_discovery",
       },
     });
   }, []);
 
   return (
-    <main className="min-h-screen bg-[#F5F1E8] text-[#161616]">
+    <main className="min-h-screen bg-[#F6F3EC] text-[#161616]">
       <div className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-4 py-5 sm:px-6 lg:px-8">
         <header className="flex items-center justify-between gap-4">
           <Link
@@ -517,7 +653,7 @@ function ExpertsDiscoveryContent({
 
         <section className="pt-12 text-center lg:pt-16">
           <p className="text-sm font-black uppercase tracking-[0.22em] text-[#0F5132]">
-            Fitness & Rehab Experts
+            검증 운동 전문가
           </p>
           <h1 className="mx-auto mt-3 max-w-3xl text-[clamp(2.8rem,9vw,5.8rem)] font-black leading-[0.94] text-[#111111]">
             운동/재활 전문가 찾기
@@ -526,138 +662,220 @@ function ExpertsDiscoveryContent({
             내 목표와 현재 상태에 맞는 검증된 운동 전문가를 찾아보세요.
           </p>
 
-          <div className="mx-auto mt-7 inline-flex rounded-[8px] border border-[#ded8ce] bg-white px-4 py-3 text-left shadow-sm">
-                <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#7b766d]">
-                  Center
-                </p>
-                <p className="mt-1 text-sm font-black text-[#111111]">
-                  {locationLabel}
-                </p>
-          </div>
-        </section>
-
-        <section className="mt-8 rounded-[8px] border border-[#E5E7EB] bg-white p-5 shadow-[0_18px_60px_rgba(24,24,20,0.06)] sm:p-6">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
-            <div className="flex-1">
-              <label className="text-xs font-black uppercase tracking-[0.16em] text-[#0F5132]">
-                지역명 검색
-              </label>
-              <input
-                value={locationSearch}
-                onChange={(event) => setLocationSearch(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    applyLocationSearch();
-                  }
-                }}
-                placeholder="예: 성수동, 강남구, 송파구"
-                className="mt-2 min-h-12 w-full rounded-full border border-[#D9CFBF] bg-[#FBFAF7] px-5 text-sm font-bold text-[#111111] outline-none placeholder:text-[#9CA3AF] focus:border-[#111111]"
-              />
-            </div>
-            <button
-              type="button"
-              onClick={applyLocationSearch}
-              className="rounded-full bg-[#111111] px-5 py-4 text-sm font-black text-white transition hover:bg-[#333333]"
-            >
-              지역 적용
-            </button>
-            <button
-              type="button"
-              onClick={useDeviceLocation}
-              className="rounded-full border border-[#D9CFBF] bg-white px-5 py-4 text-sm font-black text-[#111111] transition hover:border-[#111111]"
-            >
-              현재 위치 사용
-            </button>
-          </div>
-          <div className="mt-5 flex flex-wrap gap-2">
-            {mapDistanceFilters.map((filter) => {
-              const isActive = maxDistanceFilter === filter.meters;
-
-              return (
-                <button
-                  key={filter.meters}
-                  type="button"
-                  onClick={() => setMaxDistanceFilter(filter.meters)}
-                  className={`rounded-full border px-4 py-2 text-sm font-black transition ${
-                    isActive
-                      ? "border-[#0F5132] bg-[#0F5132] text-white"
-                      : "border-[#E5E7EB] bg-white text-[#374151] hover:border-[#111111]"
-                  }`}
-                >
-                  {filter.label}
-                </button>
-              );
-            })}
-          </div>
         </section>
 
         <section className="mt-10 rounded-[8px] border border-[#E5E7EB] bg-white p-5 shadow-[0_18px_60px_rgba(24,24,20,0.06)] sm:p-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.18em] text-[#0F5132]">
-                Search paths
+                전문가 추천
               </p>
               <h2 className="mt-2 text-3xl font-black text-[#111111]">
-                전문가 찾기
+                나에게 맞는 전문가 찾기
               </h2>
             </div>
-              <p className="max-w-md text-sm font-bold leading-6 text-[#4B5563]">
-              조건을 직접 고르거나 요청을 입력해 내 상황에 맞는 운동 전문가를 찾을 수 있습니다.
+            <p className="max-w-md text-sm font-bold leading-6 text-[#4B5563]">
+              필요한 도움을 선택하거나 상황을 간단히 적어주세요. TRUPICK이
+              적합한 전문가를 추천해드립니다.
             </p>
           </div>
 
-          <div className="mt-5 grid gap-4 lg:grid-cols-2">
-            <article className="rounded-[8px] border border-[#E5E7EB] bg-[#FBFAF7] p-5">
-              <span className="inline-flex rounded-full bg-[#0F5132] px-3 py-1 text-xs font-black text-white">
-                직접 검색하기
-              </span>
-              <h3 className="mt-4 text-2xl font-black text-[#111111]">
-                조건이 명확할 때
-              </h3>
-              <p className="mt-3 text-sm font-bold leading-7 text-[#374151]">
-                재활운동, 통증관리, 체형교정처럼 원하는 운동 분야와 지역을 직접 선택해보세요.
+          <div className="mt-6 grid gap-5">
+            <div>
+              <p className="text-sm font-black text-[#111111]">
+                도움이 필요한 분야
               </p>
-              <ul className="mt-4 grid gap-2 text-sm font-bold text-[#111111]">
-                <li>✓ 세부 분야/지역/거리 필터 검색</li>
-                <li>✓ 평점과 후기 수 기준 비교</li>
-                <li>✓ 상담 방식까지 빠르게 확인</li>
-              </ul>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {recommendationFields.map((field) => {
+                  const isActive = recommendationField === field;
+
+                  return (
+                    <button
+                      key={field}
+                      type="button"
+                      onClick={() => setRecommendationField(field)}
+                      className={`rounded-full border px-4 py-2 text-sm font-black transition ${
+                        isActive
+                          ? "border-[#0F5132] bg-[#0F5132] text-white"
+                          : "border-[#E5E7EB] bg-white text-[#374151] hover:border-[#111111]"
+                      }`}
+                    >
+                      {field}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(240px,0.7fr)]">
+              <label className="grid gap-2">
+                <span className="text-sm font-black text-[#111111]">
+                  상황 설명
+                </span>
+                <textarea
+                  value={situation}
+                  onChange={(event) => setSituation(event.target.value)}
+                  rows={4}
+                  placeholder="예: 어깨가 아프고 벤치프레스할 때 불편합니다."
+                  className="w-full resize-none rounded-[8px] border border-[#D9CFBF] bg-[#FBFAF7] px-4 py-3 text-sm font-bold leading-6 text-[#111111] outline-none placeholder:text-[#9CA3AF] focus:border-[#0F5132]"
+                />
+              </label>
+
+              <div className="grid gap-4">
+                <label className="grid gap-2">
+                  <span className="text-sm font-black text-[#111111]">
+                    지역
+                  </span>
+                  <input
+                    value={locationSearch}
+                    onChange={(event) => setLocationSearch(event.target.value)}
+                    placeholder="예: 강남, 서초, 송파"
+                    className="min-h-12 w-full rounded-[8px] border border-[#D9CFBF] bg-[#FBFAF7] px-4 text-sm font-bold text-[#111111] outline-none placeholder:text-[#9CA3AF] focus:border-[#0F5132]"
+                  />
+                </label>
+
+                <label className="grid gap-2">
+                  <span className="text-sm font-black text-[#111111]">
+                    상담 방식
+                  </span>
+                  <select
+                    value={preferredMethod}
+                    onChange={(event) => setPreferredMethod(event.target.value)}
+                    className="min-h-12 w-full rounded-[8px] border border-[#D9CFBF] bg-[#FBFAF7] px-4 text-sm font-bold text-[#111111] outline-none focus:border-[#0F5132]"
+                  >
+                    {recommendationMethods.map((method) => (
+                      <option key={method} value={method}>
+                        {method}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <button
+                type="button"
+                onClick={requestRecommendations}
+                className="rounded-full bg-[#0F5132] px-6 py-4 text-sm font-black text-white transition hover:bg-[#146C43]"
+              >
+                전문가 추천받기
+              </button>
               <a
                 href="#expert-search"
-                className="mt-5 inline-flex rounded-full bg-[#0F5132] px-5 py-3 text-sm font-black text-white transition hover:bg-[#146C43]"
+                className="rounded-full border border-[#D9CFBF] bg-white px-6 py-4 text-center text-sm font-black text-[#111111] transition hover:border-[#111111]"
               >
-                전문가 찾기
+                전체 전문가 둘러보기
               </a>
-            </article>
-
-            <article className="rounded-[8px] border border-[#E9D7FE] bg-[#FBF7FF] p-5">
-              <span className="inline-flex rounded-full bg-[#6D28D9] px-3 py-1 text-xs font-black text-white">
-                AI 매칭 받기
-              </span>
-              <h3 className="mt-4 text-2xl font-black text-[#111111]">
-                상황 설명이 필요할 때
-              </h3>
-              <p className="mt-3 text-sm font-bold leading-7 text-[#374151]">
-                내 통증, 목표, 운동 경험을 바탕으로 적합한 운동 전문가를 추천받으세요.
-              </p>
-              <ul className="mt-4 grid gap-2 text-sm font-bold text-[#111111]">
-                <li>✓ 통증 부위와 운동 목표 기반 추천</li>
-                <li>✓ 적합도 기반 전문가 3~5명 추천</li>
-                <li>✓ 매칭 이유와 함께 확인 가능</li>
-              </ul>
-              <Link
-                href="/match"
-                className="mt-5 inline-flex rounded-full bg-[#6D28D9] px-5 py-3 text-sm font-black text-white transition hover:bg-[#5B21B6]"
-              >
-                맞춤 전문가 찾기
-              </Link>
-            </article>
-          </div>
-
-          <div className="mt-4 rounded-[8px] border border-[#E5E7EB] bg-white px-4 py-3 text-sm font-bold leading-6 text-[#374151]">
-            TRUPICK의 전문가 찾기는 직접 검색과 요청 기반 추천을 하나의 탐색 흐름으로 연결합니다.
+            </div>
           </div>
         </section>
+
+        {recommendationRequested ? (
+          <section className="mt-6 rounded-[8px] border border-[#E5E7EB] bg-white p-5 shadow-sm sm:p-6">
+            {recommendations.length > 0 ? (
+              <>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.18em] text-[#0F5132]">
+                      Recommended
+                    </p>
+                    <h2 className="mt-2 text-3xl font-black text-[#111111]">
+                      회원님의 상황에 맞는 전문가를 추천했어요.
+                    </h2>
+                  </div>
+                  <p className="text-sm font-bold text-[#4B5563]">
+                    {recommendations.length}명 추천
+                  </p>
+                </div>
+                <div className="mt-5 grid gap-4 lg:grid-cols-3">
+                  {recommendations.map((expert) => (
+                    <article
+                      key={expert.id}
+                      className="rounded-[8px] border border-[#E5E7EB] bg-[#FBFAF7] p-4"
+                    >
+                      <div className="flex items-start gap-4">
+                        <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full bg-[#E5E7EB]">
+                          <Image
+                            src={expert.photoUrl}
+                            alt={expert.nickname}
+                            fill
+                            sizes="64px"
+                            className="object-cover"
+                          />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap gap-2">
+                            <span className="rounded-full bg-[#E8F2EC] px-3 py-1 text-xs font-black text-[#0F5132]">
+                              VERIFIED
+                            </span>
+                            {expert.planType === "premium" ? (
+                              <span className="rounded-full bg-[#111111] px-3 py-1 text-xs font-black text-white">
+                                PREMIUM
+                              </span>
+                            ) : null}
+                          </div>
+                          <h3 className="mt-3 text-xl font-black text-[#111111]">
+                            {expert.nickname}
+                          </h3>
+                          <p className="mt-1 text-sm font-bold text-[#374151]">
+                            {expert.profession}
+                          </p>
+                          <p className="mt-1 text-sm font-black text-[#111111]">
+                            {expert.location}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="mt-4 rounded-[8px] bg-white p-4">
+                        <p className="text-xs font-black uppercase tracking-[0.14em] text-[#0F5132]">
+                          추천 이유
+                        </p>
+                        <p className="mt-2 text-sm font-bold leading-6 text-[#374151]">
+                          {expert.recommendationReason}
+                        </p>
+                      </div>
+                      <div className="mt-4 flex flex-wrap gap-2 text-xs font-black text-[#374151]">
+                        <span className="rounded-full bg-white px-3 py-2">
+                          추천 점수 {expert.recommendationScore}
+                        </span>
+                        <span className="rounded-full bg-white px-3 py-2">
+                          ★ {expert.rating.toFixed(1)}
+                        </span>
+                      </div>
+                      <div className="mt-4 grid gap-2">
+                        <Link
+                          href={`/experts/${expert.id}`}
+                          className="rounded-full border border-[#D9CFBF] bg-white px-4 py-3 text-center text-sm font-black text-[#111111] transition hover:border-[#111111]"
+                        >
+                          프로필 보기
+                        </Link>
+                        <ConsultationRequestFlow
+                          expertId={expert.id}
+                          expertName={expert.nickname}
+                          triggerLabel="상담 신청"
+                          triggerClassName="block w-full rounded-full bg-[#0F5132] px-4 py-3 text-center text-sm font-black text-white transition hover:bg-[#146C43]"
+                        />
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="rounded-[8px] bg-[#FBFAF7] p-6 text-center">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-[#0F5132]">
+                  No match
+                </p>
+                <h2 className="mt-2 text-3xl font-black text-[#111111]">
+                  조건을 조금 넓혀 다시 검색해보세요.
+                </h2>
+                <p className="mx-auto mt-3 max-w-2xl text-sm font-bold leading-7 text-[#4B5563]">
+                  지역을 넓히거나 상담 방식을 “상관없음”으로 변경하면 더 많은
+                  전문가를 추천받을 수 있습니다.
+                </p>
+              </div>
+            )}
+          </section>
+        ) : null}
 
         <section
           id="expert-search"
@@ -709,6 +927,27 @@ function ExpertsDiscoveryContent({
                           }`}
                         >
                           {subcategory}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="mt-5 flex flex-wrap gap-2">
+                    {mapDistanceFilters.map((filter) => {
+                      const isActive = maxDistanceFilter === filter.meters;
+
+                      return (
+                        <button
+                          key={filter.meters}
+                          type="button"
+                          onClick={() => setMaxDistanceFilter(filter.meters)}
+                          className={`rounded-full border px-4 py-2 text-sm font-black transition ${
+                            isActive
+                              ? "border-[#0F5132] bg-[#0F5132] text-white"
+                              : "border-[#E5E7EB] bg-white text-[#374151] hover:border-[#111111]"
+                          }`}
+                        >
+                          {filter.label}
                         </button>
                       );
                     })}
@@ -941,12 +1180,12 @@ function ExpertsDiscoveryContent({
                         size="compact"
                       />
                     </div>
-                    <Link
-                      href="/request"
-                      className="block w-full rounded-full bg-[#0F5132] px-5 py-4 text-center text-sm font-black text-white transition hover:bg-[#146C43]"
-                    >
-                      Request consultation
-                    </Link>
+                    <ConsultationRequestFlow
+                      expertId={selectedExpert.id}
+                      expertName={selectedExpert.nickname}
+                      triggerLabel="상담 신청"
+                      triggerClassName="block w-full rounded-full bg-[#0F5132] px-5 py-4 text-center text-sm font-black text-white transition hover:bg-[#146C43]"
+                    />
                   </div>
                 </div>
               </div>
@@ -964,82 +1203,6 @@ function ExpertsDiscoveryContent({
           onSelectExpert={selectExpert}
         />
 
-        <section className="mt-10 pb-14">
-          <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-[#ff5a5f]">
-                Radar
-              </p>
-              <h2 className="mt-1 text-2xl font-black text-[#111111]">
-                거리 기반 전문가 탐색
-              </h2>
-            </div>
-            <p className="text-sm font-bold text-[#4B5563]">
-              500m · 1km · 3km · 5km
-            </p>
-          </div>
-
-          <div className="relative mx-auto aspect-square w-full max-w-3xl overflow-hidden rounded-[8px] border border-[#E5E7EB] bg-[#f1efe8] shadow-[0_24px_80px_rgba(24,24,20,0.10)] sm:aspect-[1.55/1]">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.98)_0%,rgba(255,255,255,0.9)_24%,rgba(242,239,230,0.78)_58%,rgba(227,222,210,0.94)_100%)]" />
-            <div className="absolute inset-0 bg-[linear-gradient(rgba(35,35,31,0.048)_1px,transparent_1px),linear-gradient(90deg,rgba(35,35,31,0.048)_1px,transparent_1px)] bg-[size:40px_40px]" />
-            <div className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-[#20201d]/10" />
-            <div className="absolute left-0 top-1/2 h-px w-full -translate-y-1/2 bg-[#20201d]/10" />
-
-            {distanceRings.map((ring) => {
-              const size = `${(ring.meters / maxRadarDistance) * 88}%`;
-
-              return (
-                <div
-                  key={ring.label}
-                  className="absolute left-1/2 top-1/2 rounded-full border border-[#24231f]/20"
-                  style={{
-                    width: size,
-                    height: size,
-                    transform: "translate(-50%, -50%)",
-                  }}
-                >
-                  <span className="absolute -right-2 top-1/2 -translate-y-1/2 rounded-full bg-white/90 px-2 py-1 text-[10px] font-black text-[#6d685f] shadow-sm">
-                    {ring.label}
-                  </span>
-                </div>
-              );
-            })}
-
-            <div className="absolute left-1/2 top-1/2 z-20 flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-[5px] border-white bg-[#ff5a5f] text-xs font-black text-white shadow-[0_16px_42px_rgba(255,90,95,0.34)]">
-              You
-            </div>
-
-            {filteredExperts.map((expert) => {
-              const isSelected = selectedExpert?.id === expert.id;
-
-              return (
-                <button
-                  key={expert.id}
-                  type="button"
-                  aria-label={`${expert.nickname}, ${expert.profession}`}
-                  onClick={() => selectExpert(expert)}
-                  className={`absolute z-30 h-11 w-11 -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-full border-[3px] bg-white shadow-[0_12px_30px_rgba(18,18,16,0.20)] transition hover:scale-110 sm:h-12 sm:w-12 ${
-                    isSelected
-                      ? "border-[#ff5a5f] ring-4 ring-[#ff5a5f]/20"
-                      : "border-white"
-                  }`}
-                  style={getMarkerPosition(expert)}
-                >
-                  <Image
-                    src={expert.photoUrl}
-                    alt=""
-                    fill
-                    sizes="48px"
-                    className="object-cover"
-                  />
-                  {expert.planType === "premium" ? (
-                    <span className="absolute bottom-0 right-0 h-4 w-4 rounded-full border-2 border-white bg-[#111111]" />
-                  ) : null}
-                </button>
-              );
-            })}
-          </div>
-        </section>
       </div>
     </main>
   );
@@ -1066,7 +1229,7 @@ export default function ExpertsPage() {
   return (
     <Suspense
       fallback={
-        <main className="min-h-screen bg-[#F5F1E8] px-4 py-8 text-[#161616]">
+        <main className="min-h-screen bg-[#F6F3EC] px-4 py-8 text-[#161616]">
           <div className="mx-auto max-w-7xl rounded-[8px] border border-[#E5E7EB] bg-[#FFFFFF] p-6 text-sm font-black text-[#4B5563]">
             전문가 탐색을 준비하고 있습니다.
           </div>

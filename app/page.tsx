@@ -38,20 +38,20 @@ type ReviewStats = Record<number, { rating: number; reviewCount: number }>;
 
 const standards = [
   {
-    title: "Credentials",
-    description: "자격, 이력, 활동 정보를 확인해 기본 신뢰 기준을 세웁니다.",
+    title: "경력 검토",
+    description: "실제 지도 경력과 전문 분야를 확인합니다.",
   },
   {
-    title: "Expertise",
-    description: "재활운동, 통증관리, 체형교정 등 실제 전문성을 검토합니다.",
+    title: "전문가 인터뷰",
+    description: "상담 방식과 전문성을 직접 검토합니다.",
   },
   {
-    title: "Interview",
-    description: "전문가의 철학, 문제 해결 방식, 고객 응대 태도를 확인합니다.",
+    title: "실제 사례 검토",
+    description: "회원 변화 사례와 지도 경험을 확인합니다.",
   },
   {
-    title: "Monitoring",
-    description: "후기, 응답률, 상담 품질을 지속적으로 살펴봅니다.",
+    title: "프로필 검증",
+    description: "자격, 활동 지역, 소개 정보를 점검합니다.",
   },
 ];
 
@@ -208,11 +208,11 @@ export default function HomePage() {
   const mapExperts = featuredExperts.length > 0 ? featuredExperts : [];
 
   return (
-    <main className="min-h-screen bg-[#F5F1E8] text-[#111111]">
+    <main className="min-h-screen bg-[#F6F3EC] text-[#111111]">
       <header className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-5 sm:flex-nowrap sm:px-6 lg:px-8">
         <Link
           href="/"
-          className="text-2xl font-extrabold tracking-[0.16em] text-[#111111]"
+          className="text-lg font-extrabold tracking-[0.16em] text-[#111111]"
         >
           TRUPICK
         </Link>
@@ -220,20 +220,18 @@ export default function HomePage() {
       </header>
 
       <section className="mx-auto flex min-h-[calc(100vh-88px)] w-full max-w-7xl flex-col justify-center px-4 py-16 sm:px-6 lg:px-8">
-        <div className="max-w-5xl">
+        <div className="max-w-4xl">
           <p className="text-sm font-black uppercase tracking-[0.28em] text-[#0F5132]">
-            Premium Verified Network
+            PREMIUM VERIFIED NETWORK
           </p>
-          <h1 className="mt-8 text-[clamp(4rem,16vw,9.5rem)] font-black leading-[0.86] tracking-[-0.055em] text-[#111111]">
-            TRUPICK
+          <h1 className="mt-6 max-w-4xl text-[clamp(3rem,9vw,6.4rem)] font-black leading-[0.98] tracking-normal text-[#111111] sm:tracking-[-0.045em]">
+            검증된 전문가를
+            <br />
+            쉽고 안전하게 찾으세요
           </h1>
-          <p className="mt-8 max-w-4xl text-[clamp(2.35rem,8vw,5.5rem)] font-black leading-[0.96] tracking-[-0.045em] text-[#111111]">
-            Verified Experts. Nothing Less.
-          </p>
           <p className="mt-8 max-w-2xl text-lg font-bold leading-8 text-[#374151] sm:text-xl">
-            운동/재활 전문가를 경력, 전문성, 인터뷰, 실제 사례 기준으로
-            선별합니다. 가까운 전문가를 더 명확하게 비교하고 상담까지
-            이어가세요.
+            운동 · 재활 · 체형교정 전문가를 경력, 인터뷰, 실제 사례를
+            기준으로 TRUPICK이 직접 검증합니다.
           </p>
 
           <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
@@ -244,32 +242,38 @@ export default function HomePage() {
               전문가 찾기
             </Link>
             <Link
-              href="/register"
+              href="/how-we-verify"
               className="rounded-full border border-[#111111] bg-white px-8 py-4 text-center text-base font-black text-[#111111] shadow-sm transition hover:-translate-y-0.5"
             >
-              전문가 등록
+              검증 기준 보기
             </Link>
           </div>
         </div>
       </section>
 
-      <section className="mx-auto w-full max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
+      <section className="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
         <div className="max-w-3xl">
           <p className="text-sm font-black uppercase tracking-[0.22em] text-[#0F5132]">
-            Our Standards
+            검증 기준
           </p>
           <h2 className="mt-4 text-4xl font-black tracking-[-0.03em] text-[#111111] sm:text-6xl">
-            신뢰는 기준에서 시작됩니다.
+            TRUPICK 검증 기준
           </h2>
         </div>
 
-        <div className="mt-12 grid gap-px overflow-hidden rounded-[8px] border border-[#E5E7EB] bg-[#E5E7EB] md:grid-cols-4">
-          {standards.map((item) => (
-            <article key={item.title} className="bg-white p-6 sm:p-8">
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-[#0F5132]">
+        <div className="mt-10 grid gap-4 md:grid-cols-4">
+          {standards.map((item, index) => (
+            <article
+              key={item.title}
+              className="rounded-[8px] border border-[#E5E7EB] bg-white p-6"
+            >
+              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#E8F2EC] text-sm font-black text-[#0F5132]">
+                {index + 1}
+              </span>
+              <h3 className="mt-5 text-xl font-black text-[#111111]">
                 {item.title}
-              </p>
-              <p className="mt-5 text-lg font-bold leading-8 text-[#374151]">
+              </h3>
+              <p className="mt-3 text-sm font-bold leading-7 text-[#374151]">
                 {item.description}
               </p>
             </article>
@@ -280,7 +284,7 @@ export default function HomePage() {
       <section className="mx-auto grid w-full max-w-7xl gap-8 px-4 py-20 sm:px-6 lg:grid-cols-[0.85fr_1.15fr] lg:px-8">
         <div className="flex flex-col justify-center">
           <p className="text-sm font-black uppercase tracking-[0.22em] text-[#0F5132]">
-            Find Experts Nearby
+            지도 기반 탐색
           </p>
           <h2 className="mt-4 text-4xl font-black tracking-[-0.03em] text-[#111111] sm:text-6xl">
             가까운 전문가를 지도에서 찾으세요.
