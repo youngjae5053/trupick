@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import type { Provider } from "@supabase/supabase-js";
 import { getSupabaseBrowserClient } from "@/app/supabaseBrowser";
 
-type SocialProvider = "google" | "kakao";
+type SocialProvider = "google";
 
 const socialButtons: Array<{
   provider: SocialProvider;
@@ -15,14 +15,8 @@ const socialButtons: Array<{
   {
     provider: "google",
     loginLabel: "Google로 계속하기",
-    signupLabel: "Google로 시작하기",
+    signupLabel: "Google로 계속하기",
     mark: "G",
-  },
-  {
-    provider: "kakao",
-    loginLabel: "Kakao로 계속하기",
-    signupLabel: "Kakao로 시작하기",
-    mark: "K",
   },
 ];
 
@@ -116,7 +110,7 @@ export default function SocialAuthButtons({
       </div>
 
       <p className="mt-3 text-xs font-bold leading-5 text-[#6B7280]">
-        Google과 Kakao 계정으로 빠르게 시작할 수 있습니다.
+        Google 계정으로 빠르게 시작할 수 있습니다.
       </p>
 
       {message ? (

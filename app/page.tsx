@@ -5,10 +5,6 @@ import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import AuthNav from "@/app/components/AuthNav";
-import {
-  ExpertDiscoveryProfile,
-  getNearbyExperts,
-} from "@/app/experts/expertDiscoveryData";
 import { getSupabaseBrowserClient } from "@/app/supabaseBrowser";
 
 type Expert = {
@@ -31,7 +27,7 @@ type LandingExpert = {
   reviews: number;
   distance: string;
   isPremium: boolean;
-  photoUrl: string;
+  photoUrl: string | null;
   href: string;
 };
 
@@ -59,7 +55,7 @@ const standards = [
 const storyPoints = [
   "TRUPICK은 단순히 많은 전문가를 보여주는 서비스가 아닙니다.",
   "고객의 몸과 시간에 직접 영향을 주는 운동/재활 영역에서 신뢰할 수 있는 선택지를 만드는 것이 목표입니다.",
-  "전문가 선별 원칙, 실제 후기, 거리 기반 탐색을 통해 더 적은 고민으로 더 나은 전문가를 만날 수 있게 돕습니다.",
+  "Standards, 실제 후기, 상담 흐름을 통해 더 적은 고민으로 더 나은 전문가를 만날 수 있게 돕습니다.",
 ];
 
 const searchTags = ["어깨 통증", "체형교정", "다이어트", "재활운동", "러닝", "근력향상"];
@@ -83,54 +79,27 @@ function isFitnessExpert(expert: {
   );
 }
 
-function formatDistance(meters: number) {
-  return meters < 1000 ? `${meters}m` : `${(meters / 1000).toFixed(1)}km`;
-}
-
 function toLandingExperts(
   experts: Expert[],
-  fallbackExperts: ExpertDiscoveryProfile[],
   reviewStats: ReviewStats = {}
 ): LandingExpert[] {
   const fitnessExperts = experts.filter(isFitnessExpert);
-  const fitnessFallbackExperts = fallbackExperts.filter(
-    (expert) => expert.category === "운동/재활"
-  );
-  const source =
-    fitnessExperts.length > 0
-      ? fitnessExperts.map((expert, index) => {
-          const fallback =
-            fitnessFallbackExperts[index % fitnessFallbackExperts.length];
-          const stats = reviewStats[expert.id];
+  const source = fitnessExperts.map((expert) => {
+    const stats = reviewStats[expert.id];
 
-          return {
-            id: expert.id,
-            name: expert.name,
-            profession: expert.specialty,
-            category: expert.category || fallback?.category || "운동/재활",
-            rating: stats?.rating ?? fallback?.rating ?? 4.9,
-            reviews: stats?.reviewCount ?? fallback?.reviewCount ?? 0,
-            distance: fallback ? formatDistance(fallback.distanceMeters) : "1.2km",
-            isPremium: expert.plan_type === "premium",
-            photoUrl:
-              expert.image_url ||
-              fallback?.photoUrl ||
-              "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=600&q=80",
-            href: `/experts/${expert.id}`,
-          };
-        })
-      : fitnessFallbackExperts.slice(0, 3).map((expert) => ({
-          id: expert.id,
-          name: expert.nickname,
-          profession: expert.profession,
-          category: expert.category,
-          rating: expert.rating,
-          reviews: expert.reviewCount,
-          distance: formatDistance(expert.distanceMeters),
-          isPremium: expert.planType === "premium",
-          photoUrl: expert.photoUrl,
-          href: "/experts",
-        }));
+    return {
+      id: expert.id,
+      name: expert.name,
+      profession: expert.specialty,
+      category: expert.category || "운동/재활",
+      rating: stats?.rating ?? 0,
+      reviews: stats?.reviewCount ?? 0,
+      distance: "상담 가능",
+      isPremium: expert.plan_type === "premium",
+      photoUrl: expert.image_url || null,
+      href: `/experts/${expert.id}`,
+    };
+  });
 
   return source
     .sort((a, b) => Number(b.isPremium) - Number(a.isPremium) || b.rating - a.rating)
@@ -140,9 +109,6 @@ function toLandingExperts(
 export default function HomePage() {
   const router = useRouter();
   const [experts, setExperts] = useState<Expert[]>([]);
-  const [fallbackExperts, setFallbackExperts] = useState<ExpertDiscoveryProfile[]>(
-    []
-  );
   const [reviewStats, setReviewStats] = useState<ReviewStats>({});
   const [heroSearch, setHeroSearch] = useState("");
 
@@ -150,12 +116,6 @@ export default function HomePage() {
     let isMounted = true;
 
     async function loadLandingData() {
-      const nearbyExperts = await getNearbyExperts();
-
-      if (isMounted) {
-        setFallbackExperts(nearbyExperts);
-      }
-
       try {
         const supabase = getSupabaseBrowserClient();
         const { data } = await supabase
@@ -206,8 +166,8 @@ export default function HomePage() {
   }, []);
 
   const featuredExperts = useMemo(
-    () => toLandingExperts(experts, fallbackExperts, reviewStats),
-    [experts, fallbackExperts, reviewStats]
+    () => toLandingExperts(experts, reviewStats),
+    [experts, reviewStats]
   );
 
   const mapExperts = featuredExperts.length > 0 ? featuredExperts : [];
@@ -239,13 +199,13 @@ export default function HomePage() {
             PREMIUM VERIFIED NETWORK
           </p>
           <h1 className="mt-6 max-w-4xl text-[clamp(2.6rem,7vw,4.8rem)] font-extrabold leading-[1.04] tracking-normal text-[#111111] sm:tracking-[-0.035em]">
-            내게 필요한 전문가,
+            좋은 전문가를 찾는 일,
             <br />
-            TRUPICK이 대신 찾아드립니다.
+            TRUPICK이 더 쉽게 만듭니다.
           </h1>
           <p className="mt-7 max-w-2xl text-lg font-bold leading-8 text-[#374151] sm:text-xl">
-            운동 · 재활 · 체형교정 전문가를 경력, 인터뷰, 실제 사례를
-            기준으로 선별합니다.
+            운동 · 재활 · 체형교정 전문가를 TRUPICK의 선별 기준으로
+            추천받아보세요.
           </p>
 
           <form
@@ -256,7 +216,7 @@ export default function HomePage() {
               <input
                 value={heroSearch}
                 onChange={(event) => setHeroSearch(event.target.value)}
-                placeholder="어떤 전문가가 필요하신가요?"
+                placeholder="어깨 통증, 다이어트, 체형교정, 러닝..."
                 className="min-h-14 flex-1 rounded-[8px] bg-[#F8F6F0] px-5 text-base font-bold text-[#111111] outline-none placeholder:text-[#9CA3AF]"
               />
               <button
@@ -301,7 +261,7 @@ export default function HomePage() {
       <section className="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
         <div className="max-w-3xl">
           <p className="text-sm font-black uppercase tracking-[0.22em] text-[#0F5132]">
-            전문가 선별 원칙
+            Standards
           </p>
           <h2 className="mt-4 text-4xl font-black tracking-[-0.03em] text-[#111111] sm:text-6xl">
             TRUPICK Standards
@@ -340,9 +300,8 @@ export default function HomePage() {
             가까운 전문가를 지도에서 찾으세요.
           </h2>
           <p className="mt-6 text-lg font-bold leading-8 text-[#374151]">
-            현재는 TRUPICK의 위치 기반 데이터 구조로 전문가 위치와 거리를
-            표시합니다. Kakao Map 키를 연결하면 실제 지도 위 마커로 확장할 수
-            있도록 구성했습니다.
+            승인된 전문가가 등록되면 위치와 상담 가능 지역을 기준으로
+            탐색할 수 있도록 준비했습니다.
           </p>
           <Link
             href="/experts"
@@ -373,13 +332,19 @@ export default function HomePage() {
                 className={`absolute ${positions[index]} flex -translate-x-1/2 -translate-y-1/2 items-center gap-3 rounded-full border border-[#E5E7EB] bg-white px-3 py-2 shadow-[0_16px_42px_rgba(24,24,20,0.16)] transition hover:-translate-y-[calc(50%+4px)]`}
               >
                 <span className="relative h-11 w-11 overflow-hidden rounded-full bg-[#E5E7EB]">
-                  <Image
-                    src={expert.photoUrl}
-                    alt={expert.name}
-                    fill
-                    sizes="44px"
-                    className="object-cover"
-                  />
+                  {expert.photoUrl ? (
+                    <Image
+                      src={expert.photoUrl}
+                      alt={expert.name}
+                      fill
+                      sizes="44px"
+                      className="object-cover"
+                    />
+                  ) : (
+                    <span className="flex h-full w-full items-center justify-center bg-[#E8F2EC] text-sm font-black text-[#0F5132]">
+                      {expert.name.slice(0, 1)}
+                    </span>
+                  )}
                 </span>
                 <span className="min-w-0 pr-2">
                   <span className="block max-w-28 truncate text-sm font-black text-[#111111]">
@@ -395,7 +360,7 @@ export default function HomePage() {
 
           <div className="absolute bottom-5 left-5 rounded-[8px] border border-[#E5E7EB] bg-white p-4 shadow-sm">
             <p className="text-xs font-black uppercase tracking-[0.16em] text-[#0F5132]">
-              Kakao Map Ready
+              Map Ready
             </p>
             <p className="mt-2 text-sm font-bold text-[#374151]">
               위치 검색, 현재 위치, 전문가 마커 연동 예정
@@ -420,20 +385,26 @@ export default function HomePage() {
         </div>
 
         <div className="grid gap-5 lg:grid-cols-3">
-          {featuredExperts.map((expert) => (
+          {featuredExperts.length > 0 ? featuredExperts.map((expert) => (
             <Link
               key={expert.id}
               href={expert.href}
               className="group overflow-hidden rounded-[8px] border border-[#E5E7EB] bg-white shadow-[0_22px_70px_rgba(24,24,20,0.08)] transition hover:-translate-y-1"
             >
               <div className="relative h-80 bg-[#E5E7EB]">
-                <Image
-                  src={expert.photoUrl}
-                  alt={expert.name}
-                  fill
-                  sizes="(max-width: 1024px) 100vw, 33vw"
-                  className="object-cover transition duration-500 group-hover:scale-[1.03]"
-                />
+                {expert.photoUrl ? (
+                  <Image
+                    src={expert.photoUrl}
+                    alt={expert.name}
+                    fill
+                    sizes="(max-width: 1024px) 100vw, 33vw"
+                    className="object-cover transition duration-500 group-hover:scale-[1.03]"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center bg-[#E8F2EC] text-6xl font-black text-[#0F5132]">
+                    {expert.name.slice(0, 1)}
+                  </div>
+                )}
                 {expert.isPremium ? (
                   <span className="absolute left-4 top-4 rounded-full bg-[#111111] px-4 py-2 text-xs font-black text-white">
                     Premium Expert
@@ -467,7 +438,16 @@ export default function HomePage() {
                 </div>
               </div>
             </Link>
-          ))}
+          )) : (
+            <div className="rounded-[8px] border border-[#E5E7EB] bg-white p-10 text-center lg:col-span-3">
+              <p className="text-2xl font-black text-[#111111]">
+                현재 선별 중인 전문가가 준비 중입니다.
+              </p>
+              <p className="mx-auto mt-3 max-w-lg text-sm font-bold leading-6 text-[#374151]">
+                TRUPICK 팀이 실제 전문가를 검토하고 있습니다. 등록이 승인되면 이곳에 노출됩니다.
+              </p>
+            </div>
+          )}
         </div>
       </section>
 

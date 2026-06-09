@@ -10,15 +10,13 @@ import { getSupabaseBrowserClient } from "@/app/supabaseBrowser";
 type UserRole = "customer" | "expert" | "admin";
 
 const wizardSteps = [
-  { id: 1, label: "Basic Info", title: "기본 정보를 입력해주세요." },
-  { id: 2, label: "Expertise", title: "전문성과 경험을 알려주세요." },
-  { id: 3, label: "Verification", title: "검증 자료를 추가해주세요." },
-  { id: 4, label: "Philosophy", title: "전문가 철학을 들려주세요." },
-  { id: 5, label: "Case Portfolio", title: "대표 사례를 정리해주세요." },
-  { id: 6, label: "Preview & Submit", title: "프로필을 확인하고 제출하세요." },
+  { id: 1, label: "기본 정보", title: "기본 정보를 입력해주세요." },
+  { id: 2, label: "전문성", title: "전문성과 검증 자료를 알려주세요." },
+  { id: 3, label: "소개", title: "고객에게 보일 소개와 대표 사례를 작성해주세요." },
+  { id: 4, label: "제출", title: "프로필을 확인하고 제출하세요." },
 ];
 
-const consultationOptions = ["방문 상담", "온라인 상담", "센터 상담"];
+const consultationOptions = ["센터 방문", "온라인", "방문 상담"];
 const verificationSteps = [
   "자격 정보 확인",
   "경력 검토",
@@ -48,7 +46,7 @@ function RegisterStatusShell({
   tone?: "green" | "coral";
 }) {
   return (
-    <main className="min-h-screen bg-[#F5F1E8] px-4 py-6 text-[#111111] sm:px-6 lg:px-10">
+    <main className="min-h-screen bg-[#F6F3EC] px-4 py-6 text-[#111111] sm:px-6 lg:px-10">
       <div className="mx-auto w-full max-w-7xl">
         <header className="mb-6 flex items-center justify-between gap-4">
           <Link
@@ -161,22 +159,18 @@ export default function RegisterPage() {
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
   const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
   const [location, setLocation] = useState("");
   const [specialty, setSpecialty] = useState("");
   const [consultationMethods, setConsultationMethods] = useState<string[]>([]);
   const [careerYears, setCareerYears] = useState("");
   const [careerHighlights, setCareerHighlights] = useState("");
-  const [confidentArea, setConfidentArea] = useState("");
-  const [customerType, setCustomerType] = useState("");
   const [certifications, setCertifications] = useState("");
   const [certificationFile, setCertificationFile] = useState<File | null>(null);
   const [portfolioUrl, setPortfolioUrl] = useState("");
   const [snsUrl, setSnsUrl] = useState("");
+  const [oneLineIntro, setOneLineIntro] = useState("");
   const [philosophy, setPhilosophy] = useState("");
-  const [promise, setPromise] = useState("");
-  const [faqOne, setFaqOne] = useState("");
-  const [faqTwo, setFaqTwo] = useState("");
-  const [faqThree, setFaqThree] = useState("");
   const [caseTitle, setCaseTitle] = useState("");
   const [caseProblem, setCaseProblem] = useState("");
   const [caseProcess, setCaseProcess] = useState("");
@@ -237,45 +231,25 @@ export default function RegisterPage() {
     };
   }, [router]);
 
-  useEffect(() => {
-    if (!submitted) {
-      return;
-    }
-
-    const redirectTimer = window.setTimeout(() => {
-      router.push("/mypage");
-    }, 1800);
-
-    return () => window.clearTimeout(redirectTimer);
-  }, [router, submitted]);
-
   const completionItems = useMemo(
     () => [
       {
-        label: "Basic Info",
+        label: "기본 정보",
         complete: Boolean(
-          name && location && specialty && consultationMethods.length > 0
+          name &&
+            phone &&
+            location &&
+            specialty &&
+            consultationMethods.length > 0
         ),
       },
       {
-        label: "Expertise",
-        complete: Boolean(
-          careerYears && careerHighlights && confidentArea && customerType
-        ),
+        label: "전문성",
+        complete: Boolean(careerYears && careerHighlights && certifications),
       },
       {
-        label: "Verification",
-        complete: Boolean(
-          (certifications || certificationFile) && portfolioUrl && snsUrl
-        ),
-      },
-      {
-        label: "Philosophy",
-        complete: Boolean(philosophy && promise && faqOne && faqTwo && faqThree),
-      },
-      {
-        label: "Case Portfolio",
-        complete: Boolean(caseTitle && caseProblem && caseProcess && caseResult),
+        label: "소개",
+        complete: Boolean(oneLineIntro && philosophy && caseTitle && caseProblem && caseProcess && caseResult),
       },
     ],
     [
@@ -285,20 +259,13 @@ export default function RegisterPage() {
       caseProcess,
       caseResult,
       caseTitle,
-      certificationFile,
       certifications,
-      confidentArea,
       consultationMethods.length,
-      customerType,
-      faqOne,
-      faqThree,
-      faqTwo,
       location,
       name,
+      oneLineIntro,
+      phone,
       philosophy,
-      portfolioUrl,
-      promise,
-      snsUrl,
       specialty,
     ]
   );
@@ -317,19 +284,11 @@ export default function RegisterPage() {
     }
 
     if (!completionItems[1].complete) {
-      tips.push("경력과 잘 맞는 고객 유형을 입력하면 전문성이 더 선명해집니다.");
+      tips.push("경력과 자격/교육 이력을 입력하면 전문성이 더 선명해집니다.");
     }
 
     if (!completionItems[2].complete) {
-      tips.push("자격증/증빙 자료를 추가하면 검증 가능성이 높아집니다.");
-    }
-
-    if (!completionItems[3].complete) {
-      tips.push("전문가 철학과 Q&A를 입력하면 상담 전 신뢰도가 높아집니다.");
-    }
-
-    if (!completionItems[4].complete) {
-      tips.push("대표 사례를 입력하면 신뢰도가 높아집니다.");
+      tips.push("한 줄 소개, 철학, 대표 사례를 입력하면 고객이 더 쉽게 선택할 수 있습니다.");
     }
 
     return tips;
@@ -346,22 +305,18 @@ export default function RegisterPage() {
   function resetForm() {
     setCurrentStep(1);
     setName("");
+    setPhone("");
     setLocation("");
     setSpecialty("");
     setConsultationMethods([]);
     setCareerYears("");
     setCareerHighlights("");
-    setConfidentArea("");
-    setCustomerType("");
     setCertifications("");
     setCertificationFile(null);
     setPortfolioUrl("");
     setSnsUrl("");
+    setOneLineIntro("");
     setPhilosophy("");
-    setPromise("");
-    setFaqOne("");
-    setFaqTwo("");
-    setFaqThree("");
     setCaseTitle("");
     setCaseProblem("");
     setCaseProcess("");
@@ -372,11 +327,12 @@ export default function RegisterPage() {
     if (
       step === 1 &&
       (!name.trim() ||
+        !phone.trim() ||
         !location.trim() ||
         !specialty.trim() ||
         consultationMethods.length === 0)
     ) {
-      alert("이름, 활동 지역, 세부 분야, 상담 방식을 입력해주세요.");
+      alert("이름, 연락처, 활동 지역, 전문 분야, 상담 방식을 입력해주세요.");
       return false;
     }
 
@@ -384,43 +340,22 @@ export default function RegisterPage() {
       step === 2 &&
       (!careerYears.trim() ||
         !careerHighlights.trim() ||
-        !confidentArea.trim() ||
-        !customerType.trim())
+        !certifications.trim())
     ) {
-      alert("경력 년수, 주요 경력, 자신 있는 분야, 고객 유형을 입력해주세요.");
+      alert("경력 년수, 주요 경력, 자격증/교육 이력을 입력해주세요.");
       return false;
     }
 
     if (
       step === 3 &&
-      ((!certifications.trim() && !certificationFile) ||
-        !portfolioUrl.trim() ||
-        !snsUrl.trim())
-    ) {
-      alert("자격증/증빙 자료, 포트폴리오 링크, SNS/웹사이트 링크를 입력해주세요.");
-      return false;
-    }
-
-    if (
-      step === 4 &&
-      (!philosophy.trim() ||
-        !promise.trim() ||
-        !faqOne.trim() ||
-        !faqTwo.trim() ||
-        !faqThree.trim())
-    ) {
-      alert("전문가 철학, 고객 약속, 자주 받는 질문 3개를 입력해주세요.");
-      return false;
-    }
-
-    if (
-      step === 5 &&
-      (!caseTitle.trim() ||
+      (!oneLineIntro.trim() ||
+        !philosophy.trim() ||
+        !caseTitle.trim() ||
         !caseProblem.trim() ||
         !caseProcess.trim() ||
         !caseResult.trim())
     ) {
-      alert("대표 사례 제목, 고객 문제, 진행 과정, 결과를 모두 입력해주세요.");
+      alert("한 줄 소개, 전문가 철학, 대표 사례를 입력해주세요.");
       return false;
     }
 
@@ -442,7 +377,7 @@ export default function RegisterPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    for (let step = 1; step <= 5; step += 1) {
+    for (let step = 1; step <= 3; step += 1) {
       if (!validateStep(step)) {
         setCurrentStep(step);
         return;
@@ -465,24 +400,20 @@ export default function RegisterPage() {
       const career = [
         `경력 년수: ${careerYears.trim()}`,
         `주요 경력: ${careerHighlights.trim()}`,
-        `가장 자신 있는 분야: ${confidentArea.trim()}`,
-        `잘 맞는 고객 유형: ${customerType.trim()}`,
       ].join("\n\n");
 
       const description = [
+        "연락처",
+        phone.trim(),
+        "",
         "상담 방식",
         consultationMethods.join(", "),
         "",
+        "한 줄 소개",
+        oneLineIntro.trim(),
+        "",
         "전문가 철학",
         philosophy.trim(),
-        "",
-        "고객에게 약속하는 것",
-        promise.trim(),
-        "",
-        "자주 받는 질문",
-        `1. ${faqOne.trim()}`,
-        `2. ${faqTwo.trim()}`,
-        `3. ${faqThree.trim()}`,
         "",
         "대표 사례",
         `제목: ${caseTitle.trim()}`,
@@ -573,8 +504,8 @@ export default function RegisterPage() {
     return (
       <RegisterStatusShell
         eyebrow="Registration Submitted"
-        title="검증 신청이 접수되었습니다."
-        description="TRUPICK 팀이 검토 후 승인 여부를 안내드립니다. 잠시 후 마이페이지로 이동합니다."
+        title="전문가 등록 신청이 접수되었습니다."
+        description="TRUPICK 팀이 경력, 전문 분야, 대표 사례를 검토한 뒤 승인 여부를 안내드립니다."
       >
         <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#0F5132] text-xl font-black text-white">
           ✓
@@ -604,7 +535,7 @@ export default function RegisterPage() {
   const activeStep = wizardSteps[currentStep - 1];
 
   return (
-    <main className="min-h-screen bg-[#F5F1E8] px-4 py-6 text-[#111111] sm:px-6 lg:px-10">
+    <main className="min-h-screen bg-[#F6F3EC] px-4 py-6 text-[#111111] sm:px-6 lg:px-10">
       <div className="mx-auto w-full max-w-7xl">
         <header className="mb-6 flex items-center justify-between gap-4">
           <Link
@@ -624,18 +555,17 @@ export default function RegisterPage() {
         <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
           <div className="rounded-[8px] border border-[#E5E7EB] bg-white p-5 shadow-[0_24px_80px_rgba(24,24,20,0.08)] sm:p-8 lg:p-10">
             <p className="text-sm font-black uppercase tracking-[0.2em] text-[#0F5132]">
-              Expert Host Wizard
+              Verified Expert Application
             </p>
             <h1 className="mt-3 text-4xl font-black tracking-[-0.03em] text-[#111111] sm:text-5xl">
-              단계별로 검증 전문가 프로필을 완성하세요.
+              TRUPICK 검증 전문가로 등록하기
             </h1>
             <p className="mt-4 max-w-2xl text-base font-bold leading-7 text-[#374151]">
-              에어비앤비 호스트 등록처럼 필요한 정보를 순서대로 입력합니다.
-              진행 상태는 유지되며, 제출 전 프로필 미리보기를 확인할 수
-              있습니다.
+              경력, 전문 분야, 대표 사례를 바탕으로 전문가 프로필을 구성하고
+              TRUPICK 검토를 거쳐 노출됩니다.
             </p>
 
-            <div className="mt-8 grid gap-2 sm:grid-cols-2 xl:grid-cols-6">
+            <div className="mt-8 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
               {wizardSteps.map((step) => (
                 <button
                   key={step.id}
@@ -674,6 +604,15 @@ export default function RegisterPage() {
                         value={name}
                         onChange={setName}
                         placeholder="김영재"
+                      />
+                    </div>
+                    <div>
+                      <FieldLabel>연락처</FieldLabel>
+                      <TextInput
+                        value={phone}
+                        onChange={setPhone}
+                        placeholder="010-0000-0000"
+                        type="tel"
                       />
                     </div>
                     <div className="grid gap-5 sm:grid-cols-2">
@@ -738,41 +677,18 @@ export default function RegisterPage() {
                         placeholder="근무 센터, 지도 경험, 주요 프로젝트를 입력해주세요."
                       />
                     </div>
-                    <div className="grid gap-5 sm:grid-cols-2">
-                      <div>
-                        <FieldLabel>가장 자신 있는 분야</FieldLabel>
-                        <TextInput
-                          value={confidentArea}
-                          onChange={setConfidentArea}
-                          placeholder="예: 허리 통증 관리"
-                        />
-                      </div>
-                      <div>
-                        <FieldLabel>잘 맞는 고객 유형</FieldLabel>
-                        <TextInput
-                          value={customerType}
-                          onChange={setCustomerType}
-                          placeholder="예: 운동을 처음 시작하는 직장인"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ) : null}
-
-                {currentStep === 3 ? (
-                  <div className="mt-6 grid gap-5">
                     <div>
-                      <FieldLabel>자격증/증빙 자료</FieldLabel>
+                      <FieldLabel>자격증/수료/교육 이력</FieldLabel>
                       <TextArea
                         value={certifications}
                         onChange={setCertifications}
-                        placeholder="생활스포츠지도사, 건강운동관리사 등 쉼표로 구분해 입력해주세요."
+                        placeholder="생활스포츠지도사, 재활운동 교육, 필라테스 지도자 과정 등 쉼표로 구분해 입력해주세요."
                         rows={4}
                       />
                     </div>
-                    <label className="flex min-h-32 cursor-pointer flex-col items-center justify-center rounded-[8px] border border-dashed border-[#D9CFBF] bg-white px-4 py-6 text-center transition hover:border-[#111111]">
+                    <label className="flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-[8px] border border-dashed border-[#D9CFBF] bg-white px-4 py-6 text-center transition hover:border-[#111111]">
                       <span className="text-sm font-black text-[#111111]">
-                        증빙 파일 업로드
+                        자격/증빙 파일 업로드
                       </span>
                       <span className="mt-2 text-xs font-bold text-[#374151]">
                         {certificationFile
@@ -790,72 +706,28 @@ export default function RegisterPage() {
                         }}
                       />
                     </label>
-                    <div className="grid gap-5 sm:grid-cols-2">
-                      <div>
-                        <FieldLabel>포트폴리오 링크</FieldLabel>
-                        <TextInput
-                          value={portfolioUrl}
-                          onChange={setPortfolioUrl}
-                          placeholder="https://portfolio.example.com"
-                          type="url"
-                        />
-                      </div>
-                      <div>
-                        <FieldLabel>SNS/웹사이트 링크</FieldLabel>
-                        <TextInput
-                          value={snsUrl}
-                          onChange={setSnsUrl}
-                          placeholder="https://instagram.com/trupick"
-                          type="url"
-                        />
-                      </div>
-                    </div>
                   </div>
                 ) : null}
 
-                {currentStep === 4 ? (
+                {currentStep === 3 ? (
                   <div className="mt-6 grid gap-5">
+                    <div>
+                      <FieldLabel>한 줄 소개</FieldLabel>
+                      <TextInput
+                        value={oneLineIntro}
+                        onChange={setOneLineIntro}
+                        placeholder="예: 통증 없이 움직이는 몸을 만드는 재활운동 코치"
+                      />
+                    </div>
                     <div>
                       <FieldLabel>전문가 철학</FieldLabel>
                       <TextArea
                         value={philosophy}
                         onChange={setPhilosophy}
-                        placeholder="좋은 전문가는 고객이 자신의 몸과 선택을 이해하도록 돕는 사람이라고 생각합니다."
-                        rows={5}
-                      />
-                    </div>
-                    <div>
-                      <FieldLabel>고객에게 약속하는 것</FieldLabel>
-                      <TextArea
-                        value={promise}
-                        onChange={setPromise}
-                        placeholder="무리한 운동보다 안전한 변화와 지속 가능한 루틴을 약속합니다."
+                        placeholder="고객에게 전하고 싶은 가치와 일하는 방식을 적어주세요."
                         rows={4}
                       />
                     </div>
-                    <div className="grid gap-4">
-                      <FieldLabel>자주 받는 질문 3개</FieldLabel>
-                      <TextInput
-                        value={faqOne}
-                        onChange={setFaqOne}
-                        placeholder="예: 통증이 있어도 운동을 시작할 수 있나요?"
-                      />
-                      <TextInput
-                        value={faqTwo}
-                        onChange={setFaqTwo}
-                        placeholder="예: 상담은 몇 회 정도 받아야 하나요?"
-                      />
-                      <TextInput
-                        value={faqThree}
-                        onChange={setFaqThree}
-                        placeholder="예: 집에서도 할 수 있는 루틴을 받을 수 있나요?"
-                      />
-                    </div>
-                  </div>
-                ) : null}
-
-                {currentStep === 5 ? (
-                  <div className="mt-6 grid gap-5">
                     <div>
                       <FieldLabel>대표 사례 제목</FieldLabel>
                       <TextInput
@@ -865,7 +737,7 @@ export default function RegisterPage() {
                       />
                     </div>
                     <div>
-                      <FieldLabel>고객 문제</FieldLabel>
+                      <FieldLabel>고객의 문제</FieldLabel>
                       <TextArea
                         value={caseProblem}
                         onChange={setCaseProblem}
@@ -882,19 +754,21 @@ export default function RegisterPage() {
                         rows={3}
                       />
                     </div>
-                    <div>
-                      <FieldLabel>결과</FieldLabel>
-                      <TextArea
-                        value={caseResult}
-                        onChange={setCaseResult}
-                        placeholder="어떤 변화나 결과가 있었나요?"
-                        rows={3}
-                      />
+                    <div className="grid gap-5 sm:grid-cols-2">
+                      <div>
+                        <FieldLabel>결과</FieldLabel>
+                        <TextArea
+                          value={caseResult}
+                          onChange={setCaseResult}
+                          placeholder="어떤 변화나 결과가 있었나요?"
+                          rows={3}
+                        />
+                      </div>
                     </div>
                   </div>
                 ) : null}
 
-                {currentStep === 6 ? (
+                {currentStep === 4 ? (
                   <div className="mt-6 grid gap-5">
                     <article className="overflow-hidden rounded-[8px] border border-[#E5E7EB] bg-white shadow-[0_18px_55px_rgba(24,24,20,0.08)]">
                       <div className="bg-[#111111] p-5 text-white sm:p-6">
@@ -918,15 +792,16 @@ export default function RegisterPage() {
 
                       <div className="grid gap-px bg-[#E5E7EB] md:grid-cols-2">
                         {[
+                          ["연락처", phone],
                           ["상담 방식", consultationMethods.join(", ")],
                           ["경력", `${careerYears} · ${careerHighlights}`],
+                          ["한 줄 소개", oneLineIntro],
                           ["전문가 철학", philosophy],
                           ["대표 사례", `${caseTitle} - ${caseResult}`],
                           [
                             "자격/증빙 정보",
                             certifications || certificationFile?.name || "",
                           ],
-                          ["SNS/포트폴리오 링크", `${snsUrl} ${portfolioUrl}`],
                         ].map(([label, value]) => (
                           <div key={label} className="bg-white p-5">
                             <p className="text-xs font-black uppercase tracking-[0.14em] text-[#0F5132]">
@@ -965,7 +840,7 @@ export default function RegisterPage() {
                                 {item.label}
                               </span>
                               <span className="text-xs font-black text-[#0F5132]">
-                                {item.complete ? "20점" : "0점"}
+                                {item.complete ? "완료" : "대기"}
                               </span>
                             </div>
                           ))}

@@ -4,10 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import {
-  ExpertDiscoveryProfile,
-  getNearbyExperts,
-} from "./expertDiscoveryData";
+import { ExpertDiscoveryProfile } from "./expertDiscoveryData";
 import {
   ExpertCategory,
   isExpertCategory,
@@ -23,9 +20,17 @@ type ApprovedExpertRow = {
   id: number;
   name: string;
   specialty: string;
+  location?: string | null;
+  description?: string | null;
+  career?: string | null;
   category?: ExpertCategory | null;
   plan_type?: "free" | "premium" | null;
   image_url?: string | null;
+  certifications?: string[] | string | null;
+  specialty_tags?: string[] | null;
+  consultation_methods?: string[] | null;
+  sns_url?: string | null;
+  portfolio_url?: string | null;
 };
 
 type ReviewStats = Record<number, { rating: number; reviewCount: number }>;
@@ -429,13 +434,26 @@ function isFitnessExpert(expert: ExpertDiscoveryProfile) {
   );
 }
 
+function normalizeStringArray(value: string[] | string | null | undefined) {
+  if (Array.isArray(value)) {
+    return value.filter(Boolean);
+  }
+
+  if (typeof value === "string") {
+    return value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
 function mapApprovedExperts(
   rows: ApprovedExpertRow[],
-  fallbackExperts: ExpertDiscoveryProfile[],
   reviewStats: ReviewStats = {}
 ): ExpertDiscoveryProfile[] {
   return rows.map((expert, index) => {
-    const fallback = fallbackExperts[index % fallbackExperts.length];
     const stats = reviewStats[expert.id];
 
     return {
@@ -446,25 +464,25 @@ function mapApprovedExperts(
         expert.category && isExpertCategory(expert.category)
           ? expert.category
           : deriveCategory(expert.specialty),
-      location: fallback?.location ?? "서울",
+      location: expert.location || "지역 협의",
       description:
-        fallback?.description ??
+        expert.description ||
         "TRUPICK에서 승인한 전문가입니다. 상담 목적에 맞춰 실질적인 해결 방향을 제안합니다.",
-      career: fallback?.career ?? "TRUPICK Verified Expert",
-      certifications: fallback?.certifications ?? [],
-      specialtyTags: fallback?.specialtyTags ?? [],
-      consultationMethods: fallback?.consultationMethods ?? ["Online"],
-      snsUrl: fallback?.snsUrl ?? null,
-      portfolioUrl: fallback?.portfolioUrl ?? null,
+      career: expert.career || "경력 정보 검토 완료",
+      certifications: normalizeStringArray(expert.certifications),
+      specialtyTags: expert.specialty_tags || [],
+      consultationMethods:
+        expert.consultation_methods && expert.consultation_methods.length > 0
+          ? expert.consultation_methods
+          : ["센터 방문", "온라인", "방문 상담"],
+      snsUrl: expert.sns_url ?? null,
+      portfolioUrl: expert.portfolio_url ?? null,
       planType: expert.plan_type === "premium" ? "premium" : "free",
       rating: stats?.rating ?? 0,
       reviewCount: stats?.reviewCount ?? 0,
-      distanceMeters: fallback?.distanceMeters ?? 1200,
-      bearingDegrees: fallback?.bearingDegrees ?? index * 48,
-      photoUrl:
-        expert.image_url ||
-        fallback?.photoUrl ||
-        "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=240&q=80",
+      distanceMeters: 1200 + index * 600,
+      bearingDegrees: index * 48,
+      photoUrl: expert.image_url || "",
     };
   });
 }
@@ -502,22 +520,26 @@ function ExpertsDiscoveryContent({
     let isMounted = true;
 
     async function loadExperts() {
-      const fallbackExperts = await getNearbyExperts();
-      const fitnessFallbackExperts = fallbackExperts.filter(isFitnessExpert);
-      const supabase = getSupabaseBrowserClient();
-      let data = fitnessFallbackExperts;
+      let data: ExpertDiscoveryProfile[] = [];
 
-      if (supabase) {
+      try {
+        const supabase = getSupabaseBrowserClient();
         const { data: approvedRows, error } = await supabase
           .from("experts")
-          .select("id, name, specialty, category, plan_type, image_url")
+          .select(
+            "id, name, specialty, location, description, career, category, plan_type, image_url, certifications, specialty_tags, consultation_methods, sns_url, portfolio_url"
+          )
           .eq("approved", true)
           .eq("approval_status", "approved");
 
-        const { data: reviewRows } = await supabase
+        const { data: reviewRows, error: reviewError } = await supabase
           .from("reviews")
           .select("expert_id, rating")
           .returns<Array<{ expert_id: number; rating: number }>>();
+
+        if (reviewError) {
+          console.error("experts reviews lookup error", reviewError);
+        }
 
         const reviewStats =
           reviewRows?.reduce<ReviewStats>((stats, review) => {
@@ -538,32 +560,15 @@ function ExpertsDiscoveryContent({
           }, {}) ?? {};
 
         if (error) {
-          const { data: fallbackRows } = await supabase
-            .from("experts")
-            .select("id, name, specialty, image_url")
-            .eq("approved", true)
-            .eq("approval_status", "approved");
-
-          data = fallbackRows
-            ? mapApprovedExperts(
-                fallbackRows,
-                fitnessFallbackExperts,
-                reviewStats
-              ).filter(isFitnessExpert)
-            : [];
+          console.error("experts approved lookup error", error);
+          data = [];
         } else {
           data = approvedRows
-            ? mapApprovedExperts(
-                approvedRows,
-                fitnessFallbackExperts,
-                reviewStats
-              ).filter(isFitnessExpert)
+            ? mapApprovedExperts(approvedRows, reviewStats).filter(isFitnessExpert)
             : [];
         }
-      }
-
-      if (data.length === 0) {
-        data = fitnessFallbackExperts;
+      } catch (error) {
+        console.error("experts load error", error);
       }
 
       if (isMounted) {
@@ -798,13 +803,19 @@ function ExpertsDiscoveryContent({
                     >
                       <div className="flex items-start gap-4">
                         <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full bg-[#E5E7EB]">
-                          <Image
-                            src={expert.photoUrl}
-                            alt={expert.nickname}
-                            fill
-                            sizes="64px"
-                            className="object-cover"
-                          />
+                          {expert.photoUrl ? (
+                            <Image
+                              src={expert.photoUrl}
+                              alt={expert.nickname}
+                              fill
+                              sizes="64px"
+                              className="object-cover"
+                            />
+                          ) : (
+                            <span className="flex h-full w-full items-center justify-center bg-[#E8F2EC] text-xl font-black text-[#0F5132]">
+                              {expert.nickname.slice(0, 1)}
+                            </span>
+                          )}
                         </div>
                         <div className="min-w-0">
                           <div className="flex flex-wrap gap-2">
@@ -1007,13 +1018,19 @@ function ExpertsDiscoveryContent({
                     className="flex w-full items-start gap-4 text-left"
                   >
                     <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full bg-[#E5E7EB]">
-                      <Image
-                        src={expert.photoUrl}
-                        alt={expert.nickname}
-                        fill
-                        sizes="64px"
-                        className="object-cover"
-                      />
+                      {expert.photoUrl ? (
+                        <Image
+                          src={expert.photoUrl}
+                          alt={expert.nickname}
+                          fill
+                          sizes="64px"
+                          className="object-cover"
+                        />
+                      ) : (
+                        <span className="flex h-full w-full items-center justify-center bg-[#E8F2EC] text-xl font-black text-[#0F5132]">
+                          {expert.nickname.slice(0, 1)}
+                        </span>
+                      )}
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
@@ -1059,6 +1076,22 @@ function ExpertsDiscoveryContent({
                   </div>
                 </article>
               ))}
+              {filteredExperts.length === 0 ? (
+                <div className="rounded-[8px] border border-[#E5E7EB] bg-white p-10 text-center shadow-sm">
+                  <p className="text-2xl font-black text-[#111111]">
+                    현재 선별 중인 전문가가 준비 중입니다.
+                  </p>
+                  <p className="mx-auto mt-3 max-w-lg text-sm font-bold leading-6 text-[#4B5563]">
+                    승인된 전문가만 노출됩니다. 조건을 넓히거나 잠시 후 다시 확인해주세요.
+                  </p>
+                  <Link
+                    href="/become-expert"
+                    className="mt-6 inline-flex rounded-full bg-[#0F5132] px-6 py-3 text-sm font-black text-white transition hover:bg-[#146C43]"
+                  >
+                    전문가 등록 안내 보기
+                  </Link>
+                </div>
+              ) : null}
             </div>
           </div>
 
@@ -1066,14 +1099,20 @@ function ExpertsDiscoveryContent({
             {selectedExpert ? (
               <div className="overflow-hidden rounded-[8px] border border-[#E5E7EB] bg-[#FFFFFF] shadow-[0_24px_70px_rgba(24,24,20,0.12)] transition hover:-translate-y-[4px]">
                 <div className="relative h-64 w-full">
-                  <Image
-                    src={selectedExpert.photoUrl}
-                    alt={selectedExpert.nickname}
-                    fill
-                    sizes="(max-width: 1024px) 100vw, 360px"
-                    className="object-cover"
-                    priority
-                  />
+                  {selectedExpert.photoUrl ? (
+                    <Image
+                      src={selectedExpert.photoUrl}
+                      alt={selectedExpert.nickname}
+                      fill
+                      sizes="(max-width: 1024px) 100vw, 360px"
+                      className="object-cover"
+                      priority
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center bg-[#E8F2EC] text-7xl font-black text-[#0F5132]">
+                      {selectedExpert.nickname.slice(0, 1)}
+                    </div>
+                  )}
                 </div>
                 <div className="p-5">
                   <p className="mb-3 text-xs font-black uppercase tracking-[0.18em] text-[#ff5a5f]">

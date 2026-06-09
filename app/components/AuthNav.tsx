@@ -91,6 +91,13 @@ export default function AuthNav() {
   return (
     <nav className="flex w-full flex-wrap items-center justify-start gap-2 text-sm sm:w-auto sm:justify-end sm:gap-4">
       <Link
+        href="/experts"
+        style={secondaryMobileLinkStyle}
+        className="hidden sm:inline"
+      >
+        전문가 찾기
+      </Link>
+      <Link
         href="/how-we-verify"
         style={secondaryMobileLinkStyle}
         className="hidden sm:inline"
@@ -102,10 +109,7 @@ export default function AuthNav() {
         style={secondaryMobileLinkStyle}
         className="hidden sm:inline"
       >
-        전문가로 등록
-      </Link>
-      <Link href="/beta" style={secondaryMobileLinkStyle} className="hidden sm:inline">
-        Beta Test
+        전문가 등록
       </Link>
 
       {loading ? null : user ? (
@@ -152,7 +156,7 @@ export default function AuthNav() {
           ) : (
             <>
               <Link href="/experts" style={linkStyle}>
-                전문가 둘러보기
+                전문가 찾기
               </Link>
               <Link href="/my-consultations" style={linkStyle}>
                 내 상담
@@ -161,9 +165,6 @@ export default function AuthNav() {
           )}
           <Link href="/mypage" style={linkStyle}>
             마이페이지
-          </Link>
-          <Link href="/dashboard" style={linkStyle}>
-            프로필
           </Link>
           <button
             type="button"

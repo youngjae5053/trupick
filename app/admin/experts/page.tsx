@@ -73,8 +73,11 @@ const profileQualityChecklist: Array<{
 ];
 
 const structuredDescriptionLabels = [
+  "연락처",
   "상담 방식",
+  "한 줄 소개",
   "전문가 철학",
+  "수업/상담 방식",
   "고객에게 약속하는 것",
   "자주 받는 질문",
   "대표 사례",
@@ -183,8 +186,11 @@ function getLineValue(source: string | null | undefined, label: string) {
 }
 
 function getWizardSummary(expert: Expert) {
+  const phone = getSectionValue(expert.description, "연락처");
   const consultationMethods = getSectionValue(expert.description, "상담 방식");
+  const oneLineIntro = getSectionValue(expert.description, "한 줄 소개");
   const philosophy = getSectionValue(expert.description, "전문가 철학");
+  const teachingMethod = getSectionValue(expert.description, "수업/상담 방식");
   const promise = getSectionValue(expert.description, "고객에게 약속하는 것");
   const faq = getSectionValue(expert.description, "자주 받는 질문");
   const casePortfolio = getSectionValue(expert.description, "대표 사례");
@@ -194,8 +200,11 @@ function getWizardSummary(expert: Expert) {
   const customerType = getLineValue(expert.career, "잘 맞는 고객 유형");
 
   return {
+    phone,
     consultationMethods,
+    oneLineIntro,
     philosophy,
+    teachingMethod,
     promise,
     faq,
     casePortfolio,
@@ -214,18 +223,18 @@ function getProfileCompletenessScore(expert: Expert) {
       expert.name &&
         expert.location &&
         expert.specialty &&
+        summary.phone &&
         summary.consultationMethods
     ),
     Boolean(
       summary.careerYears &&
-        summary.careerHighlights &&
-        summary.confidentArea &&
-        summary.customerType
+        summary.careerHighlights
     ),
+    Boolean(certifications.length > 0),
     Boolean(
-      certifications.length > 0 && expert.portfolio_url && expert.sns_url
+      summary.oneLineIntro &&
+        summary.philosophy
     ),
-    Boolean(summary.philosophy && summary.promise && summary.faq),
     Boolean(summary.casePortfolio),
   ];
 
@@ -359,8 +368,8 @@ export default function AdminExpertsPage() {
         expert.name,
         expert.specialty,
         expert.location,
-        summary.confidentArea,
-        summary.customerType,
+        summary.oneLineIntro,
+        summary.philosophy,
       ]
         .filter(Boolean)
         .join(" ")
@@ -508,7 +517,7 @@ export default function AdminExpertsPage() {
       certification: getCertifications(expert.certifications).length > 0,
       casePortfolio: Boolean(getWizardSummary(expert).casePortfolio),
       consultationMethod: Boolean(getWizardSummary(expert).consultationMethods),
-      contactAvailability: Boolean(expert.sns_url || expert.portfolio_url),
+      contactAvailability: Boolean(getWizardSummary(expert).phone),
     });
   }
 
@@ -542,7 +551,7 @@ export default function AdminExpertsPage() {
   );
 
   return (
-    <main className="min-h-screen bg-[#F5F1E8] px-4 py-6 text-[#111111] sm:px-6 lg:px-10">
+    <main className="min-h-screen bg-[#F6F3EC] px-4 py-6 text-[#111111] sm:px-6 lg:px-10">
       <div className="mx-auto w-full max-w-7xl">
         <section className="rounded-[8px] border border-[#E5E7EB] bg-white p-6 shadow-[0_24px_80px_rgba(24,24,20,0.08)] sm:p-8">
           <p className="text-sm font-black uppercase tracking-[0.18em] text-[#0F5132]">
@@ -685,6 +694,10 @@ export default function AdminExpertsPage() {
                       <div>
                         <dt className="font-black text-[#111111]">상담 방식</dt>
                         <dd>{summary.consultationMethods || "-"}</dd>
+                      </div>
+                      <div>
+                        <dt className="font-black text-[#111111]">연락처</dt>
+                        <dd>{summary.phone || "-"}</dd>
                       </div>
                       <div>
                         <dt className="font-black text-[#111111]">경력 년수</dt>
@@ -917,6 +930,7 @@ export default function AdminExpertsPage() {
                       title: "Basic Info",
                       rows: [
                         ["이름", selectedExpert.name],
+                        ["연락처", selectedSummary.phone || "-"],
                         ["세부 분야", selectedExpert.specialty],
                         ["활동 지역", selectedExpert.location],
                         ["상담 방식", selectedSummary.consultationMethods || "-"],
@@ -927,8 +941,6 @@ export default function AdminExpertsPage() {
                       rows: [
                         ["경력 년수", selectedSummary.careerYears || "-"],
                         ["주요 경력", selectedSummary.careerHighlights || "-"],
-                        ["자신 있는 분야", selectedSummary.confidentArea || "-"],
-                        ["잘 맞는 고객", selectedSummary.customerType || "-"],
                       ],
                     },
                     {
@@ -942,17 +954,20 @@ export default function AdminExpertsPage() {
                         ],
                         [
                           "포트폴리오",
-                          selectedExpert.portfolio_url ? "링크 있음" : "-",
+                          selectedExpert.portfolio_url ? "링크 있음" : "선택 입력 없음",
                         ],
-                        ["SNS/웹사이트", selectedExpert.sns_url ? "링크 있음" : "-"],
+                        [
+                          "SNS/웹사이트",
+                          selectedExpert.sns_url ? "링크 있음" : "선택 입력 없음",
+                        ],
                       ],
                     },
                     {
                       title: "Philosophy",
                       rows: [
+                        ["한 줄 소개", selectedSummary.oneLineIntro || "-"],
                         ["전문가 철학", selectedSummary.philosophy || "-"],
-                        ["고객 약속", selectedSummary.promise || "-"],
-                        ["Q&A", selectedSummary.faq || "-"],
+                        ["대표 사례", selectedSummary.casePortfolio || "-"],
                       ],
                     },
                     {
@@ -989,7 +1004,8 @@ export default function AdminExpertsPage() {
                       {selectedExpert.specialty} · {selectedExpert.location}
                     </p>
                     <p className="mt-4 text-sm font-bold leading-7 text-[#374151]">
-                      {selectedSummary.philosophy ||
+                      {selectedSummary.oneLineIntro ||
+                        selectedSummary.philosophy ||
                         selectedExpert.description ||
                         "소개가 입력되지 않았습니다."}
                     </p>

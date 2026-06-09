@@ -241,6 +241,14 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
+function normalizeRole(value: unknown): UserRole {
+  if (value === "admin" || value === "expert" || value === "customer") {
+    return value;
+  }
+
+  return "customer";
+}
+
 export default function MyPage() {
   const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -256,116 +264,170 @@ export default function MyPage() {
     let isMounted = true;
 
     async function loadMyPage() {
-      const supabase = getSupabaseBrowserClient();
+      try {
+        const supabase = getSupabaseBrowserClient();
 
-      if (!supabase) {
-        setLoading(false);
-        return;
-      }
+        const { data: userData, error: userError } = await supabase.auth.getUser();
 
-      const { data: userData } = await supabase.auth.getUser();
-      const user = userData.user;
-
-      if (!isMounted) {
-        return;
-      }
-
-      if (!user) {
-        router.replace("/login?redirect=/mypage");
-        return;
-      }
-
-      const { data: profileData } = await supabase
-        .from("profiles")
-        .select("name, role")
-        .eq("id", user.id)
-        .maybeSingle<Profile>();
-
-      const nextProfile = {
-        name: profileData?.name ?? user.user_metadata?.name ?? null,
-        role:
-          profileData?.role ??
-          (user.user_metadata?.role as UserRole | undefined) ??
-          "customer",
-      };
-
-      if (!isMounted) {
-        return;
-      }
-
-      setProfile(nextProfile);
-
-      if (nextProfile.role === "admin") {
-        setLoading(false);
-        return;
-      }
-
-      if (nextProfile.role === "customer") {
-        const { data: requestRows, error } = await supabase
-          .from("requests")
-          .select("*")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false })
-          .returns<ConsultationRequest[]>();
-
-        if (error) {
-          setErrorMessage(getFriendlyErrorMessage(error.message));
-        } else {
-          setRequests(requestRows || []);
+        if (userError) {
+          console.error("mypage auth user error", userError);
         }
 
-        const { data: reviewRows } = await supabase
-          .from("reviews")
-          .select("request_id")
-          .eq("user_id", user.id)
-          .returns<ReviewRecord[]>();
+        const user = userData.user;
 
-        setReviewedRequestIds(
-          new Set(
-            (reviewRows || [])
-              .map((review) => review.request_id)
-              .filter((requestId): requestId is number => typeof requestId === "number")
-          )
-        );
-        setLoading(false);
-        return;
-      }
+        if (!isMounted) {
+          return;
+        }
 
-      const { data: expertData, error: expertError } = await supabase
-        .from("experts")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("id", { ascending: false })
-        .limit(1)
-        .maybeSingle<ExpertProfile>();
+        if (!user) {
+          router.replace("/login?redirect=/mypage");
+          return;
+        }
 
-      if (expertError) {
-        const { data: fallbackExpert } = await supabase
+        const fallbackName =
+          (user.user_metadata?.name as string | undefined) ||
+          (user.user_metadata?.full_name as string | undefined) ||
+          user.email?.split("@")[0] ||
+          "TRUPICK 사용자";
+        const fallbackRole = normalizeRole(user.user_metadata?.role);
+
+        const {
+          data: profileData,
+          error: profileError,
+        } = await supabase
+          .from("profiles")
+          .select("name, role")
+          .eq("id", user.id)
+          .maybeSingle<Profile>();
+
+        if (profileError) {
+          console.error("mypage profiles lookup error", profileError);
+        }
+
+        if (!profileData) {
+          const { error: profileCreateError } = await supabase
+            .from("profiles")
+            .upsert(
+              [
+                {
+                  id: user.id,
+                  name: fallbackName,
+                  role: fallbackRole,
+                },
+              ],
+              { onConflict: "id" }
+            );
+
+          if (profileCreateError) {
+            console.error("mypage profile upsert error", profileCreateError);
+          }
+        }
+
+        const nextProfile: Profile = {
+          name: profileData?.name ?? fallbackName,
+          role: normalizeRole(profileData?.role ?? fallbackRole),
+        };
+
+        if (!isMounted) {
+          return;
+        }
+
+        setProfile(nextProfile);
+
+        if (nextProfile.role === "admin") {
+          setLoading(false);
+          return;
+        }
+
+        if (nextProfile.role === "customer") {
+          const { data: requestRows, error: requestError } = await supabase
+            .from("requests")
+            .select("*")
+            .eq("user_id", user.id)
+            .order("created_at", { ascending: false })
+            .returns<ConsultationRequest[]>();
+
+          if (requestError) {
+            console.error("mypage requests lookup error", requestError);
+            setRequests([]);
+          } else {
+            setRequests(requestRows || []);
+          }
+
+          const { data: reviewRows, error: reviewError } = await supabase
+            .from("reviews")
+            .select("request_id")
+            .eq("user_id", user.id)
+            .returns<ReviewRecord[]>();
+
+          if (reviewError) {
+            console.error("mypage reviews lookup error", reviewError);
+            setReviewedRequestIds(new Set());
+          } else {
+            setReviewedRequestIds(
+              new Set(
+                (reviewRows || [])
+                  .map((review) => review.request_id)
+                  .filter(
+                    (requestId): requestId is number =>
+                      typeof requestId === "number"
+                  )
+              )
+            );
+          }
+
+          setLoading(false);
+          return;
+        }
+
+        const { data: expertData, error: expertError } = await supabase
           .from("experts")
           .select("*")
+          .eq("user_id", user.id)
           .order("id", { ascending: false })
           .limit(1)
           .maybeSingle<ExpertProfile>();
 
-        setExpertProfile(fallbackExpert ?? null);
-      } else {
-        setExpertProfile(expertData ?? null);
+        if (expertError) {
+          console.error("mypage expert profile lookup error", expertError);
+          setExpertProfile(null);
+        } else {
+          setExpertProfile(expertData ?? null);
+        }
+
+        if (expertData?.id) {
+          const { data: incomingRequests, error: incomingRequestsError } =
+            await supabase
+              .from("consultation_requests")
+              .select("*")
+              .eq("expert_id", expertData.id)
+              .order("created_at", { ascending: false })
+              .returns<ConsultationRequest[]>();
+
+          if (incomingRequestsError) {
+            console.error(
+              "mypage consultation_requests lookup error",
+              incomingRequestsError
+            );
+            setRequests([]);
+          } else {
+            setRequests(incomingRequests || []);
+          }
+        } else {
+          setRequests([]);
+        }
+
+        setLoading(false);
+      } catch (error) {
+        console.error("mypage load error", error);
+
+        if (isMounted) {
+          setErrorMessage(
+            "마이페이지 일부 정보를 불러오지 못했습니다. 로그인 상태를 확인한 뒤 다시 시도해주세요."
+          );
+          setLoading(false);
+        }
       }
-
-      const currentExpertId = expertData?.id;
-
-      if (currentExpertId) {
-        const { data: incomingRequests } = await supabase
-          .from("consultation_requests")
-          .select("*")
-          .eq("expert_id", currentExpertId)
-          .order("created_at", { ascending: false })
-          .returns<ConsultationRequest[]>();
-
-        setRequests(incomingRequests || []);
-      }
-
-      setLoading(false);
     }
 
     void loadMyPage();

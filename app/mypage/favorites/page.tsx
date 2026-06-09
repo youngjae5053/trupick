@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import FavoriteButton from "@/app/components/FavoriteButton";
-import { getFriendlyErrorMessage } from "@/app/errorMessages";
 import { getSupabaseBrowserClient } from "@/app/supabaseBrowser";
 
 type FavoriteRow = {
@@ -30,9 +29,6 @@ type SavedExpert = FavoriteRow & {
   expert: ExpertRow | null;
 };
 
-const fallbackImage =
-  "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=900&q=80";
-
 function formatSavedDate(value: string) {
   return new Intl.DateTimeFormat("ko-KR", {
     year: "numeric",
@@ -51,85 +47,107 @@ export default function FavoriteExpertsPage() {
     let isMounted = true;
 
     async function loadFavorites() {
-      const supabase = getSupabaseBrowserClient();
+      try {
+        const supabase = getSupabaseBrowserClient();
 
-      if (!supabase) {
+        const { data: userData, error: userError } = await supabase.auth.getUser();
+
+        if (userError) {
+          console.error("favorites auth user error", userError);
+        }
+
+        const user = userData.user;
+
+        if (!isMounted) {
+          return;
+        }
+
+        if (!user) {
+          router.replace("/login?redirect=/mypage/favorites");
+          return;
+        }
+
+        const { data: favoriteRows, error: favoriteError } = await supabase
+          .from("favorites")
+          .select("id, expert_id, created_at")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false })
+          .returns<FavoriteRow[]>();
+
+        if (!isMounted) {
+          return;
+        }
+
+        if (favoriteError) {
+          console.error("favorites lookup error", favoriteError);
+          setSavedExperts([]);
+          setErrorMessage(
+            "저장한 전문가 정보를 불러오지 못했습니다. 잠시 후 다시 확인해주세요."
+          );
+          setLoading(false);
+          return;
+        }
+
+        const favorites = favoriteRows || [];
+        const expertIds = favorites.map((favorite) => favorite.expert_id);
+
+        if (expertIds.length === 0) {
+          setSavedExperts([]);
+          setLoading(false);
+          return;
+        }
+
+        const { data: expertRows, error: expertError } = await supabase
+          .from("experts")
+          .select(
+            "id, name, specialty, location, description, image_url, plan_type, approved, status"
+          )
+          .in("id", expertIds)
+          .eq("approved", true)
+          .or("status.is.null,status.neq.rejected")
+          .returns<ExpertRow[]>();
+
+        if (!isMounted) {
+          return;
+        }
+
+        if (expertError) {
+          console.error("favorites expert lookup error", expertError);
+          setSavedExperts(
+            favorites.map((favorite) => ({
+              ...favorite,
+              expert: null,
+            }))
+          );
+          setErrorMessage(
+            "일부 전문가 정보를 불러오지 못했습니다. 저장 목록은 유지됩니다."
+          );
+          setLoading(false);
+          return;
+        }
+
+        const expertById = new Map(
+          (expertRows || []).map((expert) => [expert.id, expert])
+        );
+
+        setSavedExperts(
+          favorites.map((favorite) => ({
+            ...favorite,
+            expert: expertById.get(favorite.expert_id) ?? null,
+          }))
+        );
+        setLoading(false);
+      } catch (error) {
+        console.error("favorites load error", error);
+
         if (isMounted) {
-          setErrorMessage("서비스 연결 설정을 확인하는 중입니다.");
+          setSavedExperts([]);
+          setErrorMessage(
+            "저장한 전문가 정보를 불러오지 못했습니다. 잠시 후 다시 확인해주세요."
+          );
           setLoading(false);
         }
-        return;
       }
-
-      const { data: userData } = await supabase.auth.getUser();
-      const user = userData.user;
-
-      if (!isMounted) {
-        return;
-      }
-
-      if (!user) {
-        router.replace("/login?redirect=/mypage/favorites");
-        return;
-      }
-
-      const { data: favoriteRows, error: favoriteError } = await supabase
-        .from("favorites")
-        .select("id, expert_id, created_at")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .returns<FavoriteRow[]>();
-
-      if (!isMounted) {
-        return;
-      }
-
-      if (favoriteError) {
-        setErrorMessage(getFriendlyErrorMessage(favoriteError.message));
-        setLoading(false);
-        return;
-      }
-
-      const favorites = favoriteRows || [];
-      const expertIds = favorites.map((favorite) => favorite.expert_id);
-
-      if (expertIds.length === 0) {
-        setSavedExperts([]);
-        setLoading(false);
-        return;
-      }
-
-      const { data: expertRows, error: expertError } = await supabase
-        .from("experts")
-        .select(
-          "id, name, specialty, location, description, image_url, plan_type, approved, status"
-        )
-        .in("id", expertIds)
-        .eq("approved", true)
-        .or("status.is.null,status.neq.rejected")
-        .returns<ExpertRow[]>();
-
-      if (!isMounted) {
-        return;
-      }
-
-      if (expertError) {
-        setErrorMessage(getFriendlyErrorMessage(expertError.message));
-        setLoading(false);
-        return;
-      }
-
-      const expertById = new Map(
-        (expertRows || []).map((expert) => [expert.id, expert])
-      );
-
-      setSavedExperts(
-        favorites.map((favorite) => ({
-          ...favorite,
-          expert: expertById.get(favorite.expert_id) ?? null,
-        }))
-      );
-      setLoading(false);
     }
 
     void loadFavorites();
@@ -239,14 +257,20 @@ export default function FavoriteExpertsPage() {
                 >
                   <Link href={`/experts/${expert.id}`} className="block">
                     <div className="relative aspect-[4/3] bg-[#EBE7DF]">
-                      <Image
-                        src={expert.image_url || fallbackImage}
-                        alt={expert.name}
-                        fill
-                        unoptimized
-                        sizes="(max-width: 1024px) 100vw, 33vw"
-                        className="object-cover"
-                      />
+                      {expert.image_url ? (
+                        <Image
+                          src={expert.image_url}
+                          alt={expert.name}
+                          fill
+                          unoptimized
+                          sizes="(max-width: 1024px) 100vw, 33vw"
+                          className="object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center bg-[#E8F2EC] text-6xl font-black text-[#0F5132]">
+                          {expert.name.slice(0, 1)}
+                        </div>
+                      )}
                       {expert.plan_type === "premium" ? (
                         <span className="absolute left-4 top-4 rounded-full bg-[#111111] px-4 py-2 text-xs font-black text-white">
                           ✓ PREMIUM

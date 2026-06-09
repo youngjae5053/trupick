@@ -53,14 +53,21 @@ export default function FavoriteButton({
   }, [expertId]);
 
   async function toggleFavorite() {
-    const supabase = getSupabaseBrowserClient();
+    let supabase: ReturnType<typeof getSupabaseBrowserClient>;
 
-    if (!supabase) {
-      setMessage("서비스 연결 설정을 확인하는 중입니다.");
+    try {
+      supabase = getSupabaseBrowserClient();
+    } catch (error) {
+      console.error("favorite supabase client error", error);
+      setMessage("즐겨찾기 기능을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.");
       return;
     }
 
-    const { data: userData } = await supabase.auth.getUser();
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+
+    if (userError) {
+      console.error("favorite auth user error", userError);
+    }
 
     if (!userData.user) {
       const redirectPath =

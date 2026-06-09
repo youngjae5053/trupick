@@ -90,7 +90,7 @@ export default function ExpertReviewsSection({
           requestId: null,
           completedCount: 0,
           reviewedCount: 0,
-          message: "서비스 연결 설정을 확인하는 중입니다.",
+          message: "리뷰 작성 상태를 확인하지 못했습니다.",
         });
         return;
       }
@@ -180,7 +180,7 @@ export default function ExpertReviewsSection({
     const supabase = getSupabaseBrowserClient();
 
     if (!supabase) {
-      setMessage("서비스 연결 설정을 확인하는 중입니다. 잠시 후 다시 시도해주세요.");
+      setMessage("리뷰를 저장하지 못했습니다. 잠시 후 다시 시도해주세요.");
       return;
     }
 

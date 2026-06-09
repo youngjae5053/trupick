@@ -6,10 +6,6 @@ import { FormEvent, useEffect, useState } from "react";
 import { trackAnalyticsEvent } from "@/app/analytics";
 import ConsultationRequestFlow from "@/app/components/ConsultationRequestFlow";
 import { ExpertCategory } from "@/app/expertCategories";
-import {
-  ExpertDiscoveryProfile,
-  getNearbyExperts,
-} from "@/app/experts/expertDiscoveryData";
 import { getProfileCompleteness } from "@/app/profileCompleteness";
 import { getSupabaseBrowserClient } from "@/app/supabaseBrowser";
 
@@ -46,7 +42,7 @@ type MatchCandidate = {
   location: string;
   description: string;
   career: string;
-  photoUrl: string;
+  photoUrl: string | null;
   rating: number;
   reviewCount: number;
   completenessScore: number;
@@ -92,13 +88,6 @@ const concernKeywords: Record<string, string[]> = {
   러닝: ["러닝", "달리기", "마라톤", "보행", "지구력"],
   재활: ["재활", "기능회복", "통증", "운동처방", "회복"],
 };
-
-const fallbackImage =
-  "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=480&q=80";
-
-function formatDistance(meters: number) {
-  return meters < 1000 ? `${meters}m` : `${(meters / 1000).toFixed(1)}km`;
-}
 
 function deriveCategory(value: string | null | undefined): ExpertCategory {
   const text = value || "";
@@ -249,41 +238,8 @@ function calculateMatches(
     .slice(0, 5);
 }
 
-function mapMockExperts(experts: ExpertDiscoveryProfile[]): MatchCandidate[] {
-  return experts.map((expert) => ({
-    id: expert.id,
-    name: expert.nickname,
-    category: expert.category,
-    profession: expert.profession,
-    location: expert.location,
-    description: expert.description,
-    career: expert.career,
-    photoUrl: expert.photoUrl,
-    rating: expert.rating,
-    reviewCount: expert.reviewCount,
-    completenessScore: getProfileCompleteness({
-      photoUrl: expert.photoUrl,
-      description: expert.description,
-      career: expert.career,
-      certifications: expert.certifications,
-      location: expert.location,
-      consultation_methods: expert.consultationMethods,
-      sns_url: expert.snsUrl,
-      portfolio_url: expert.portfolioUrl,
-    }).score,
-    planType: expert.planType,
-    distance: formatDistance(expert.distanceMeters),
-    consultationMethods: expert.consultationMethods,
-  }));
-}
-
-function mapExpertRows(
-  rows: ExpertRow[],
-  mockExperts: ExpertDiscoveryProfile[],
-  reviewStats: ReviewStats
-): MatchCandidate[] {
-  return rows.map((expert, index) => {
-    const mock = mockExperts[index % mockExperts.length];
+function mapExpertRows(rows: ExpertRow[], reviewStats: ReviewStats): MatchCandidate[] {
+  return rows.map((expert) => {
     const stats = reviewStats[expert.id];
 
     return {
@@ -294,7 +250,7 @@ function mapExpertRows(
       location: expert.location,
       description: expert.description || "상담 목표에 맞춰 실행 가능한 방향을 제안합니다.",
       career: expert.career || "TRUPICK 검증 전문가",
-      photoUrl: expert.image_url || mock?.photoUrl || fallbackImage,
+      photoUrl: expert.image_url || null,
       rating: stats?.rating ?? 0,
       reviewCount: stats?.reviewCount ?? 0,
       completenessScore: getProfileCompleteness({
@@ -309,7 +265,7 @@ function mapExpertRows(
         portfolio: expert.portfolio,
       }).score,
       planType: expert.plan_type === "premium" ? "premium" : "free",
-      distance: mock ? formatDistance(mock.distanceMeters) : "상담 가능",
+      distance: "상담 가능",
       consultationMethods: normalizeArray(expert.consultation_methods),
     };
   });
@@ -328,16 +284,7 @@ export default function MatchPage() {
     let isMounted = true;
 
     async function loadExperts() {
-      const mockExperts = await getNearbyExperts();
       const supabase = getSupabaseBrowserClient();
-
-      if (!supabase) {
-        if (isMounted) {
-          setCandidates(mapMockExperts(mockExperts));
-          setLoadingExperts(false);
-        }
-        return;
-      }
 
       const { data: reviewRows } = await supabase
         .from("reviews")
@@ -375,9 +322,12 @@ export default function MatchPage() {
       }
 
       if (error || !data || data.length === 0) {
-        setCandidates(mapMockExperts(mockExperts));
+        if (error) {
+          console.error("match experts lookup error", error);
+        }
+        setCandidates([]);
       } else {
-        setCandidates(mapExpertRows(data, mockExperts, reviewStats));
+        setCandidates(mapExpertRows(data, reviewStats));
       }
 
       setLoadingExperts(false);
@@ -674,14 +624,20 @@ export default function MatchPage() {
                     href={`/experts/${expert.id}`}
                     className="relative block aspect-[4/3] bg-[#EBE7DF]"
                   >
-                    <Image
-                      src={expert.photoUrl}
-                      alt={expert.name}
-                      fill
-                      unoptimized
-                      sizes="(max-width: 768px) 100vw, 33vw"
-                      className="object-cover"
-                    />
+                    {expert.photoUrl ? (
+                      <Image
+                        src={expert.photoUrl}
+                        alt={expert.name}
+                        fill
+                        unoptimized
+                        sizes="(max-width: 768px) 100vw, 33vw"
+                        className="object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center bg-[#E8F2EC] text-6xl font-black text-[#0F5132]">
+                        {expert.name.slice(0, 1)}
+                      </div>
+                    )}
                     <div className="absolute left-4 top-4 flex flex-wrap gap-2">
                       <span className="rounded-full bg-white px-3 py-1.5 text-xs font-black text-[#111111] shadow-sm">
                         추천 {index + 1}

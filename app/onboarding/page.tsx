@@ -47,7 +47,7 @@ export default function OnboardingPage() {
       const supabase = getSupabaseBrowserClient();
 
       if (!supabase) {
-        setMessage("서비스 연결 설정을 확인하는 중입니다.");
+        setMessage("계정 정보를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.");
         setLoading(false);
         return;
       }
@@ -109,7 +109,7 @@ export default function OnboardingPage() {
     const supabase = getSupabaseBrowserClient();
 
     if (!supabase) {
-      setMessage("서비스 연결 설정을 확인하는 중입니다.");
+      setMessage("계정 정보를 저장하지 못했습니다. 잠시 후 다시 시도해주세요.");
       return;
     }
 

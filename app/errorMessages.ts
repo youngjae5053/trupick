@@ -25,7 +25,7 @@ export function getFriendlyErrorMessage(message?: string | null) {
   }
 
   if (normalized.includes("schema cache") || normalized.includes("column")) {
-    return "서비스 설정을 확인하는 중입니다. 잠시 후 다시 시도해주세요.";
+    return "필요한 정보를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.";
   }
 
   return "처리 중 오류가 발생했습니다. 입력 내용을 확인한 뒤 다시 시도해주세요.";

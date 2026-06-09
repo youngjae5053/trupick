@@ -9,7 +9,6 @@ import ExpertReviewsSection, {
 } from "@/app/components/ExpertReviewsSection";
 import FavoriteButton from "@/app/components/FavoriteButton";
 import { PreparedAlertButton } from "@/app/components/VerifiedExpertProfileActions";
-import { getNearbyExperts } from "@/app/experts/expertDiscoveryData";
 
 type Expert = {
   id: number;
@@ -30,11 +29,8 @@ type Expert = {
   portfolio_url?: string | null;
 };
 
-const fallbackImage =
-  "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=1200&q=80";
-
-const defaultRating = 4.89;
-const defaultReviewCount = 46;
+const defaultRating = 0;
+const defaultReviewCount = 0;
 
 const verificationReasons = [
   {
@@ -52,39 +48,6 @@ const verificationReasons = [
     description:
       "실제 사례와 후기에서 문제 진단, 진행 과정, 결과 개선 흐름이 확인됩니다.",
   },
-];
-
-const representativeCases = [
-  {
-    title: "어깨 통증 개선",
-    problem: "오래 앉아 일한 뒤 어깨 통증과 팔 저림이 반복됨",
-    period: "8주",
-    method: "견갑 안정화, 흉추 가동성, 회전근개 강화 프로그램",
-    result: "통증 NRS 8 → 2",
-    metric: "75% 개선",
-  },
-  {
-    title: "허리 통증 개선",
-    problem: "운동을 시작할 때마다 허리 불편감으로 중단",
-    period: "10주",
-    method: "호흡 패턴 교정, 코어 재교육, 힙힌지 움직임 훈련",
-    result: "운동 지속 시간 20분 → 60분",
-    metric: "3배 증가",
-  },
-  {
-    title: "체형교정/다이어트",
-    problem: "체중 감량과 라운드숄더 개선을 함께 원함",
-    period: "12주",
-    method: "주 3회 근력 루틴, 식습관 코칭, 자세 리셋 운동",
-    result: "체지방률 감소와 자세 유지 시간 개선",
-    metric: "12주 완주",
-  },
-];
-
-const fallbackReviewTexts = [
-  "설명이 구체적이고 제 몸 상태에 맞춰 단계별로 안내해주셔서 신뢰가 갔습니다.",
-  "무리하게 운동을 시키지 않고 원인을 먼저 설명해주셔서 안심하고 따라갈 수 있었습니다.",
-  "상담 후 해야 할 운동과 피해야 할 동작이 명확해졌습니다.",
 ];
 
 function deriveCategory(specialty: string) {
@@ -131,16 +94,12 @@ function getSpecialtyTags(expert: Expert, category: string) {
   return ["문제 진단", "맞춤 상담", "실행 계획", "후속 관리"];
 }
 
-function getCertifications(expert: Expert, category: string) {
+function getCertifications(expert: Expert) {
   if (expert.certifications && expert.certifications.length > 0) {
     return expert.certifications;
   }
 
-  if (category === "운동/재활") {
-    return ["생활스포츠지도사", "운동처방사", "재활운동 교육 수료"];
-  }
-
-  return ["TRUPICK Verified Expert", "Professional Consultation"];
+  return [];
 }
 
 function getConsultationMethods(expert: Expert) {
@@ -148,29 +107,23 @@ function getConsultationMethods(expert: Expert) {
     return expert.consultation_methods;
   }
 
-  return ["센터 방문", "온라인", "방문 상담"];
+  return ["상담 방식 협의"];
 }
 
-function getConsultationCount(reviewCount: number, expertId: number) {
-  return Math.max(92, reviewCount * 4 + 130 + expertId * 7);
+function getConsultationCount(reviewCount: number) {
+  return reviewCount;
 }
 
-function getDistanceLabel(expertId: number) {
-  const distances = ["1.4km", "890m", "1.8km", "2.2km", "3.1km", "4.6km"];
-  return distances[(expertId - 1) % distances.length] ?? "1.4km";
+function getDistanceLabel() {
+  return "지역 협의";
 }
 
-function getResponseTime(expertId: number) {
-  const times = ["평균 30분 이내", "평균 1시간 이내", "평균 2시간 이내"];
-  return times[(expertId - 1) % times.length] ?? "평균 1시간 이내";
+function getResponseTime() {
+  return "확인 후 안내";
 }
 
-function getPhilosophy(expert: Expert, category: string) {
-  if (category === "운동/재활") {
-    return "좋은 운동 전문가는 운동을 더 시키는 사람이 아니라, 고객이 자신의 몸을 이해하고 안전하게 변화할 수 있도록 돕는 사람이라고 생각합니다.";
-  }
-
-  return `${expert.name} 전문가는 고객이 상황을 명확히 이해하고 스스로 선택할 수 있도록 돕는 상담을 중요하게 생각합니다.`;
+function getPhilosophy(expert: Expert) {
+  return getSectionValue(expert.description, "전문가 철학") || expert.description;
 }
 
 function getBestFitCustomers(category: string) {
@@ -179,18 +132,6 @@ function getBestFitCustomers(category: string) {
   }
 
   return "문제를 차분하게 정리하고 실행 가능한 다음 단계를 알고 싶은 고객에게 잘 맞습니다.";
-}
-
-function getFallbackReviews(expertId: number): ExpertReview[] {
-  return fallbackReviewTexts.map((content, index) => ({
-    id: -(index + 1),
-    expert_id: expertId,
-    user_id: null,
-    request_id: null,
-    rating: index === 1 ? 4 : 5,
-    content,
-    created_at: `2026-05-${18 - index * 5}T09:00:00.000Z`,
-  }));
 }
 
 function Stars({ value }: { value: number }) {
@@ -204,46 +145,46 @@ function Stars({ value }: { value: number }) {
   );
 }
 
-async function getMockExpert(id: number): Promise<Expert | null> {
-  const mockExpert = (await getNearbyExperts()).find((expert) => expert.id === id);
+const structuredDescriptionLabels = [
+  "연락처",
+  "상담 방식",
+  "한 줄 소개",
+  "전문가 철학",
+  "수업/상담 방식",
+  "고객에게 약속하는 것",
+  "대표 사례",
+];
 
-  if (!mockExpert) {
-    return null;
+function getSectionValue(source: string | null | undefined, label: string) {
+  if (!source) {
+    return "";
   }
 
-  return {
-    id: mockExpert.id,
-    name: mockExpert.nickname,
-    specialty: mockExpert.profession,
-    location: mockExpert.location,
-    description: mockExpert.description,
-    career: mockExpert.career,
-    image_url: mockExpert.photoUrl,
-    plan_type: mockExpert.planType,
-    rating: mockExpert.rating,
-    review_count: mockExpert.reviewCount,
-    certifications: mockExpert.certifications,
-    specialty_tags: mockExpert.specialtyTags,
-    consultation_methods: mockExpert.consultationMethods,
-    sns_url: mockExpert.snsUrl,
-    portfolio_url: mockExpert.portfolioUrl,
-  };
-}
+  const lines = source.split("\n");
+  const labelIndex = lines.findIndex((line) => line.trim() === label);
 
-async function getMockSimilarExperts(currentId: number, category: string) {
-  const mockExperts = await getNearbyExperts();
+  if (labelIndex < 0) {
+    return "";
+  }
 
-  return mockExperts
-    .filter((expert) => expert.id !== currentId && expert.category === category)
-    .slice(0, 3)
-    .map((expert) => ({
-      id: expert.id,
-      name: expert.nickname,
-      specialty: expert.profession,
-      location: expert.location,
-      image_url: expert.photoUrl,
-      plan_type: expert.planType,
-    }));
+  const values: string[] = [];
+
+  for (const line of lines.slice(labelIndex + 1)) {
+    const trimmed = line.trim();
+
+    if (
+      structuredDescriptionLabels.includes(trimmed) ||
+      (trimmed.length === 0 && values.length > 0)
+    ) {
+      break;
+    }
+
+    if (trimmed.length > 0) {
+      values.push(trimmed);
+    }
+  }
+
+  return values.join("\n").trim();
 }
 
 export default async function ExpertDetailPage({
@@ -322,17 +263,13 @@ export default async function ExpertDetailPage({
     }
   }
 
-  if (!expert && !canQuerySupabase) {
-    expert = await getMockExpert(numericId);
-  }
-
   if (!expert) {
     notFound();
   }
 
   const category = deriveCategory(expert.specialty);
   const tags = getSpecialtyTags(expert, category);
-  const certifications = getCertifications(expert, category);
+  const certifications = getCertifications(expert);
   const consultationMethods = getConsultationMethods(expert);
   const reviewAverage =
     reviews.length > 0
@@ -342,16 +279,21 @@ export default async function ExpertDetailPage({
     reviews.length > 0 ? reviewAverage : expert.rating ?? defaultRating;
   const displayReviewCount =
     reviews.length > 0 ? reviews.length : expert.review_count ?? defaultReviewCount;
-  const consultationCount = getConsultationCount(displayReviewCount, expert.id);
-  const distanceLabel = getDistanceLabel(expert.id);
-  const responseTime = getResponseTime(expert.id);
-  const philosophy = getPhilosophy(expert, category);
+  const consultationCount = getConsultationCount(displayReviewCount);
+  const distanceLabel = getDistanceLabel();
+  const responseTime = getResponseTime();
+  const philosophy = getPhilosophy(expert);
   const bestFitCustomers = getBestFitCustomers(category);
-  const reviewsForDisplay = reviews.length > 0 ? reviews : getFallbackReviews(expert.id);
-
-  if (similarExperts.length === 0) {
-    similarExperts = await getMockSimilarExperts(expert.id, category);
-  }
+  const reviewsForDisplay = reviews;
+  const casePortfolio = getSectionValue(expert.description, "대표 사례");
+  const representativeCases = casePortfolio
+    ? [
+        {
+          title: "대표 사례",
+          content: casePortfolio,
+        },
+      ]
+    : [];
 
   return (
     <main className="min-h-screen bg-[#F6F3EC] pb-24 text-[#0F172A]">
@@ -372,15 +314,21 @@ export default async function ExpertDetailPage({
         <section className="mt-5 overflow-hidden rounded-[8px] border border-[#E5E0D6] bg-white">
           <div className="grid lg:grid-cols-[minmax(0,1.05fr)_minmax(420px,0.95fr)]">
             <div className="relative min-h-[360px] bg-[#E5E0D6] sm:min-h-[560px]">
-              <Image
-                src={expert.image_url || fallbackImage}
-                alt={expert.name}
-                fill
-                unoptimized
-                sizes="(max-width: 1024px) 100vw, 55vw"
-                className="object-cover"
-                priority
-              />
+              {expert.image_url ? (
+                <Image
+                  src={expert.image_url}
+                  alt={expert.name}
+                  fill
+                  unoptimized
+                  sizes="(max-width: 1024px) 100vw, 55vw"
+                  className="object-cover"
+                  priority
+                />
+              ) : (
+                <div className="flex h-full min-h-[360px] w-full items-center justify-center bg-[#E8F2EC] text-8xl font-black text-[#1E4D3D] sm:min-h-[560px]">
+                  {expert.name.slice(0, 1)}
+                </div>
+              )}
             </div>
 
             <div className="flex flex-col justify-center p-6 sm:p-8 lg:p-12">
@@ -524,33 +472,24 @@ export default async function ExpertDetailPage({
                     key={item.title}
                     className="flex min-h-full flex-col rounded-[8px] border border-[#E5E0D6] bg-[#F8F6F0] p-5"
                   >
-                    <p className="text-sm font-black text-[#1E4D3D]">
-                      {item.period}
-                    </p>
                     <h3 className="mt-2 text-2xl font-black text-[#0F172A]">
                       {item.title}
                     </h3>
-                    <p className="mt-4 text-4xl font-black text-[#1E4D3D]">
-                      {item.metric}
+                    <p className="mt-5 whitespace-pre-wrap text-sm font-bold leading-7 text-[#374151]">
+                      {item.content}
                     </p>
-                    <div className="mt-5 grid gap-3 text-sm font-bold leading-7 text-[#374151]">
-                      <p>
-                        <span className="font-black text-[#0F172A]">문제</span>{" "}
-                        {item.problem}
-                      </p>
-                      <p>
-                        <span className="font-black text-[#0F172A]">진행</span>{" "}
-                        {item.method}
-                      </p>
-                      <p>
-                        <span className="font-black text-[#0F172A]">
-                          Before → After
-                        </span>{" "}
-                        {item.result}
-                      </p>
-                    </div>
                   </article>
                 ))}
+                {representativeCases.length === 0 ? (
+                  <div className="rounded-[8px] border border-[#E5E0D6] bg-[#F8F6F0] p-6 lg:col-span-3">
+                    <p className="text-xl font-black text-[#0F172A]">
+                      대표 사례는 현재 검토 중입니다.
+                    </p>
+                    <p className="mt-3 text-sm font-bold leading-7 text-[#374151]">
+                      TRUPICK 팀이 전문가의 사례 정보를 확인한 뒤 공개합니다.
+                    </p>
+                  </div>
+                ) : null}
               </div>
             </section>
 
@@ -660,14 +599,20 @@ export default async function ExpertDetailPage({
                     className="overflow-hidden rounded-[8px] border border-[#E5E0D6] bg-[#F8F6F0] transition hover:-translate-y-1"
                   >
                     <div className="relative aspect-[4/3] bg-[#E5E0D6]">
-                      <Image
-                        src={similar.image_url || fallbackImage}
-                        alt={similar.name}
-                        fill
-                        unoptimized
-                        sizes="(max-width: 768px) 100vw, 33vw"
-                        className="object-cover"
-                      />
+                      {similar.image_url ? (
+                        <Image
+                          src={similar.image_url}
+                          alt={similar.name}
+                          fill
+                          unoptimized
+                          sizes="(max-width: 768px) 100vw, 33vw"
+                          className="object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center bg-[#E8F2EC] text-4xl font-black text-[#1E4D3D]">
+                          {similar.name.slice(0, 1)}
+                        </div>
+                      )}
                     </div>
                     <div className="p-4">
                       <div className="flex flex-wrap gap-2">
@@ -720,14 +665,20 @@ export default async function ExpertDetailPage({
             <div className="rounded-[8px] border border-[#E5E0D6] bg-white p-5">
               <div className="flex items-center gap-3">
                 <div className="relative h-16 w-16 overflow-hidden rounded-full bg-[#E5E0D6]">
-                  <Image
-                    src={expert.image_url || fallbackImage}
-                    alt={expert.name}
-                    fill
-                    unoptimized
-                    sizes="64px"
-                    className="object-cover"
-                  />
+                  {expert.image_url ? (
+                    <Image
+                      src={expert.image_url}
+                      alt={expert.name}
+                      fill
+                      unoptimized
+                      sizes="64px"
+                      className="object-cover"
+                    />
+                  ) : (
+                    <span className="flex h-full w-full items-center justify-center bg-[#E8F2EC] text-xl font-black text-[#1E4D3D]">
+                      {expert.name.slice(0, 1)}
+                    </span>
+                  )}
                 </div>
                 <div className="min-w-0">
                   <p className="truncate text-lg font-black text-[#0F172A]">
