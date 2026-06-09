@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import type { User } from "@supabase/supabase-js";
 import { getSupabaseBrowserClient } from "@/app/supabaseBrowser";
 
 function buildOAuthErrorMessage({
@@ -41,6 +42,62 @@ function AuthCallbackContent() {
     let isMounted = true;
 
     async function handleCallback() {
+      let supabase: ReturnType<typeof getSupabaseBrowserClient>;
+
+      try {
+        supabase = getSupabaseBrowserClient();
+      } catch (error) {
+        console.error("Supabase browser client creation failed", error);
+
+        if (isMounted) {
+          setErrorMessage(
+            error instanceof Error
+              ? error.message
+              : "Supabase 브라우저 클라이언트를 생성하지 못했습니다."
+          );
+        }
+        return;
+      }
+
+      async function redirectAfterProfileCheck(user: User) {
+        if (isMounted) {
+          setMessage("회원 정보를 확인하고 있습니다.");
+        }
+
+        const { data: profile, error: profileError } = await supabase
+          .from("profiles")
+          .select("id")
+          .eq("id", user.id)
+          .maybeSingle<{ id: string }>();
+
+        if (profileError) {
+          console.error("profiles lookup error", profileError);
+
+          if (isMounted) {
+            setErrorMessage(profileError.message);
+          }
+          return;
+        }
+
+        if (!isMounted) {
+          return;
+        }
+
+        router.replace(profile ? "/mypage" : "/onboarding");
+      }
+
+      const { data: sessionData, error: sessionError } =
+        await supabase.auth.getSession();
+
+      if (sessionError) {
+        console.error("getSession error", sessionError);
+      }
+
+      if (sessionData.session?.user) {
+        await redirectAfterProfileCheck(sessionData.session.user);
+        return;
+      }
+
       const oauthError = searchParams.get("error");
       const oauthErrorCode = searchParams.get("error_code");
       const oauthErrorDescription = searchParams.get("error_description");
@@ -69,99 +126,78 @@ function AuthCallbackContent() {
       const accessToken = hashParams.get("access_token");
       const refreshToken = hashParams.get("refresh_token");
 
-      let supabase: ReturnType<typeof getSupabaseBrowserClient>;
+      if (code) {
+        const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
-      try {
-        supabase = getSupabaseBrowserClient();
-      } catch (error) {
-        console.error("Supabase browser client creation failed", error);
+        if (error) {
+          console.error("exchangeCodeForSession error", error);
 
-        if (isMounted) {
-          setErrorMessage(
-            error instanceof Error
-              ? error.message
-              : "Supabase 브라우저 클라이언트를 생성하지 못했습니다."
-          );
+          if (isMounted) {
+            setErrorMessage(error.message);
+          }
+          return;
         }
+
+        const user = data.session?.user ?? data.user ?? null;
+
+        if (!user) {
+          console.error("Code exchange succeeded but user is missing", data);
+
+          if (isMounted) {
+            setErrorMessage(
+              "로그인 사용자를 확인하지 못했습니다. 다시 로그인해주세요."
+            );
+          }
+          return;
+        }
+
+        await redirectAfterProfileCheck(user);
         return;
       }
 
-      let authResult:
-        | Awaited<ReturnType<typeof supabase.auth.exchangeCodeForSession>>
-        | Awaited<ReturnType<typeof supabase.auth.setSession>>;
-
-      if (code) {
-        authResult = await supabase.auth.exchangeCodeForSession(code);
-      } else if (accessToken && refreshToken) {
-        authResult = await supabase.auth.setSession({
+      if (accessToken && refreshToken) {
+        const { data, error } = await supabase.auth.setSession({
           access_token: accessToken,
           refresh_token: refreshToken,
         });
-      } else {
-        console.error("OAuth callback code and tokens are missing", {
-          search: window.location.search,
-          hash: window.location.hash,
-          hasAccessToken: Boolean(accessToken),
-          hasRefreshToken: Boolean(refreshToken),
-        });
 
-        if (isMounted) {
-          setErrorMessage("OAuth code가 없습니다. 다시 로그인해주세요.");
+        if (error) {
+          console.error("setSession error", error);
+
+          if (isMounted) {
+            setErrorMessage(error.message);
+          }
+          return;
         }
+
+        const user = data.session?.user ?? data.user ?? null;
+
+        if (!user) {
+          console.error("setSession succeeded but user is missing", data);
+
+          if (isMounted) {
+            setErrorMessage(
+              "로그인 사용자를 확인하지 못했습니다. 다시 로그인해주세요."
+            );
+          }
+          return;
+        }
+
+        window.history.replaceState(null, "", "/auth/callback");
+        await redirectAfterProfileCheck(user);
         return;
       }
 
-      const { data, error } = authResult;
-
-      if (error) {
-        console.error(
-          code ? "exchangeCodeForSession error" : "setSession error",
-          error
-        );
-
-        if (isMounted) {
-          setErrorMessage(error.message);
-        }
-        return;
-      }
-
-      window.history.replaceState(null, "", "/auth/callback");
-
-      const user = data.session?.user ?? data.user ?? null;
-
-      if (!user) {
-        console.error("OAuth session exchange succeeded but user is missing", data);
-
-        if (isMounted) {
-          setErrorMessage("로그인 사용자를 확인하지 못했습니다. 다시 로그인해주세요.");
-        }
-        return;
-      }
+      console.error("OAuth callback session, code, and tokens are missing", {
+        search: window.location.search,
+        hash: window.location.hash,
+        hasAccessToken: Boolean(accessToken),
+        hasRefreshToken: Boolean(refreshToken),
+      });
 
       if (isMounted) {
-        setMessage("회원 정보를 확인하고 있습니다.");
+        setErrorMessage("OAuth code가 없습니다. 다시 로그인해주세요.");
       }
-
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("id", user.id)
-        .maybeSingle<{ id: string }>();
-
-      if (profileError) {
-        console.error("profiles lookup error", profileError);
-
-        if (isMounted) {
-          setErrorMessage(profileError.message);
-        }
-        return;
-      }
-
-      if (!isMounted) {
-        return;
-      }
-
-      router.replace(profile ? "/mypage" : "/onboarding");
     }
 
     void handleCallback();
