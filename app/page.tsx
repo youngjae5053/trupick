@@ -16,6 +16,11 @@ type Expert = {
   category?: string | null;
   plan_type?: "free" | "premium" | null;
   image_url?: string | null;
+  main_profile_image?: string | null;
+  profile_images?: string[] | null;
+  intro_line?: string | null;
+  activity_area?: string | null;
+  detailed_location?: string | null;
 };
 
 type LandingExpert = {
@@ -96,7 +101,11 @@ function toLandingExperts(
       reviews: stats?.reviewCount ?? 0,
       distance: "상담 가능",
       isPremium: expert.plan_type === "premium",
-      photoUrl: expert.image_url || null,
+      photoUrl:
+        expert.main_profile_image ||
+        expert.image_url ||
+        expert.profile_images?.[0] ||
+        null,
       href: `/experts/${expert.id}`,
     };
   });
@@ -246,7 +255,7 @@ export default function HomePage() {
               href="/match"
               className="rounded-full bg-[#0F5132] px-8 py-4 text-center text-base font-black text-white shadow-[0_18px_50px_rgba(15,81,50,0.22)] transition hover:bg-[#146C43]"
             >
-              전문가 추천받기
+              전문가 추천 받기
             </Link>
             <Link
               href="/experts"

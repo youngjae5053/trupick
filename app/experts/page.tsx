@@ -31,6 +31,14 @@ type ApprovedExpertRow = {
   consultation_methods?: string[] | null;
   sns_url?: string | null;
   portfolio_url?: string | null;
+  consultation_fee?: string | null;
+  main_profile_image?: string | null;
+  profile_images?: string[] | null;
+  intro_line?: string | null;
+  career_summary?: string | null;
+  career_years?: string | null;
+  activity_area?: string | null;
+  detailed_location?: string | null;
 };
 
 type ReviewStats = Record<number, { rating: number; reviewCount: number }>;
@@ -464,11 +472,18 @@ function mapApprovedExperts(
         expert.category && isExpertCategory(expert.category)
           ? expert.category
           : deriveCategory(expert.specialty),
-      location: expert.location || "지역 협의",
+      location:
+        [expert.activity_area || expert.location, expert.detailed_location]
+          .filter(Boolean)
+          .join(" · ") || "지역 협의",
       description:
+        expert.intro_line ||
         expert.description ||
         "TRUPICK에서 승인한 전문가입니다. 상담 목적에 맞춰 실질적인 해결 방향을 제안합니다.",
-      career: expert.career || "경력 정보 검토 완료",
+      career:
+        [expert.career_years, expert.career_summary || expert.career]
+          .filter(Boolean)
+          .join(" · ") || "경력 정보 검토 완료",
       certifications: normalizeStringArray(expert.certifications),
       specialtyTags: expert.specialty_tags || [],
       consultationMethods:
@@ -482,7 +497,11 @@ function mapApprovedExperts(
       reviewCount: stats?.reviewCount ?? 0,
       distanceMeters: 1200 + index * 600,
       bearingDegrees: index * 48,
-      photoUrl: expert.image_url || "",
+      photoUrl:
+        expert.main_profile_image ||
+        expert.image_url ||
+        expert.profile_images?.[0] ||
+        "",
     };
   });
 }
@@ -527,7 +546,7 @@ function ExpertsDiscoveryContent({
         const { data: approvedRows, error } = await supabase
           .from("experts")
           .select(
-            "id, name, specialty, location, description, career, category, plan_type, image_url, certifications, specialty_tags, consultation_methods, sns_url, portfolio_url"
+            "id, name, specialty, location, description, career, category, plan_type, image_url, certifications, specialty_tags, consultation_methods, sns_url, portfolio_url, consultation_fee, main_profile_image, profile_images, intro_line, career_summary, career_years, activity_area, detailed_location"
           )
           .eq("approved", true)
           .eq("approval_status", "approved");
@@ -663,7 +682,7 @@ function ExpertsDiscoveryContent({
             검증 운동 전문가
           </p>
           <h1 className="mx-auto mt-3 max-w-3xl text-[clamp(2.8rem,9vw,5.8rem)] font-black leading-[0.94] text-[#111111]">
-            운동/재활 전문가 찾기
+            검증 전문가 찾기
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-base font-bold leading-8 text-[#4B5563] sm:text-lg">
             내 목표와 현재 상태에 맞는 검증된 운동 전문가를 찾아보세요.
@@ -675,10 +694,10 @@ function ExpertsDiscoveryContent({
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.18em] text-[#0F5132]">
-                전문가 추천
+                전문가 매칭
               </p>
               <h2 className="mt-2 text-3xl font-black text-[#111111]">
-                나에게 맞는 전문가 찾기
+                나에게 맞는 전문가 매칭
               </h2>
             </div>
             <p className="max-w-md text-sm font-bold leading-6 text-[#4B5563]">
@@ -766,7 +785,7 @@ function ExpertsDiscoveryContent({
                 onClick={requestRecommendations}
                 className="rounded-full bg-[#0F5132] px-6 py-4 text-sm font-black text-white transition hover:bg-[#146C43]"
               >
-                전문가 추천받기
+                전문가 추천 받기
               </button>
               <a
                 href="#expert-search"

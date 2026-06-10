@@ -62,7 +62,8 @@ export default function PricingPage() {
     const supabase = getSupabaseBrowserClient();
 
     if (!supabase) {
-      setMessage("서비스 연결 설정을 확인하는 중입니다. 잠시 후 다시 시도해주세요.");
+      console.error("Supabase browser client is not available on /pricing.");
+      setMessage("Premium 신청을 저장할 수 없습니다. Supabase 환경변수를 확인해주세요.");
       return;
     }
 
@@ -73,13 +74,17 @@ export default function PricingPage() {
     let expertId: number | null = null;
 
     if (user) {
-      const { data: expert } = await supabase
+      const { data: expert, error: expertError } = await supabase
         .from("experts")
         .select("id")
         .eq("user_id", user.id)
         .order("id", { ascending: false })
         .limit(1)
         .maybeSingle<{ id: number }>();
+
+      if (expertError) {
+        console.error("Failed to load expert for premium request", expertError);
+      }
 
       expertId = expert?.id ?? null;
     }
@@ -99,6 +104,7 @@ export default function PricingPage() {
     setSubmitting(false);
 
     if (error) {
+      console.error("Failed to submit premium request", error);
       setMessage(getFriendlyErrorMessage(error.message));
       return;
     }

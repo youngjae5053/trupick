@@ -45,7 +45,8 @@ export default function FeedbackPage() {
     const supabase = getSupabaseBrowserClient();
 
     if (!supabase) {
-      setErrorMessage("서비스 연결 설정을 확인하는 중입니다. 잠시 후 다시 시도해주세요.");
+      console.error("Supabase browser client is not available on /feedback.");
+      setErrorMessage("피드백을 저장할 수 없습니다. Supabase 환경변수를 확인해주세요.");
       return;
     }
 
@@ -67,6 +68,7 @@ export default function FeedbackPage() {
     setSubmitting(false);
 
     if (error) {
+      console.error("Failed to submit feedback", error);
       setErrorMessage(getFriendlyErrorMessage(error.message));
       return;
     }

@@ -8,107 +8,104 @@ import { getFriendlyErrorMessage } from "@/app/errorMessages";
 import { getSupabaseBrowserClient } from "@/app/supabaseBrowser";
 
 type UserRole = "customer" | "expert" | "admin";
+type SaveMode = "draft" | "pending";
+type ExpertStatus = "draft" | "pending" | "pending_review" | "approved" | "rejected";
+
+type ExpertCase = {
+  id: string;
+  title: string;
+  problem: string;
+  process: string;
+  result: string;
+  duration: string;
+  imageUrl: string;
+  beforeImageUrl: string;
+  afterImageUrl: string;
+};
+
+type ExistingExpert = {
+  id: number;
+  name: string | null;
+  phone?: string | null;
+  specialty: string | null;
+  location: string | null;
+  activity_area?: string | null;
+  specialties?: string[] | null;
+  career_years?: string | null;
+  career_summary?: string | null;
+  career?: string | null;
+  certifications?: string[] | string | null;
+  profile_images?: string[] | null;
+  main_profile_image?: string | null;
+  image_url?: string | null;
+  intro_line?: string | null;
+  philosophy?: string | null;
+  cases?: ExpertCase[] | null;
+  consultation_methods?: string[] | null;
+  consultation_fee?: string | null;
+  detailed_location?: string | null;
+  center_name?: string | null;
+  map_address?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  video_url?: string | null;
+  extra_intro?: string | null;
+  portfolio_url?: string | null;
+  sns_url?: string | null;
+  approved?: boolean | null;
+  approval_status?: ExpertStatus | null;
+  status?: ExpertStatus | null;
+};
 
 const wizardSteps = [
-  { id: 1, label: "기본 정보", title: "기본 정보를 입력해주세요." },
-  { id: 2, label: "전문성", title: "전문성과 검증 자료를 알려주세요." },
-  { id: 3, label: "소개", title: "고객에게 보일 소개와 대표 사례를 작성해주세요." },
-  { id: 4, label: "제출", title: "프로필을 확인하고 제출하세요." },
+  { id: 1, label: "기본 정보", title: "고객이 가장 먼저 보는 정보를 입력해주세요." },
+  { id: 2, label: "전문성", title: "전문가로 활동한 이력을 알려주세요." },
+  { id: 3, label: "소개와 사례", title: "철학과 고객 변화 사례를 정리해주세요." },
+  { id: 4, label: "검토 및 제출", title: "완성도를 확인하고 저장 방식을 선택하세요." },
 ];
 
 const consultationOptions = ["센터 방문", "온라인", "방문 상담"];
-const verificationSteps = [
-  "자격 정보 확인",
-  "경력 검토",
-  "프로필 품질 검수",
-  "승인 후 노출",
-];
+const emptyCase = (): ExpertCase => ({
+  id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+  title: "",
+  problem: "",
+  process: "",
+  result: "",
+  duration: "",
+  imageUrl: "",
+  beforeImageUrl: "",
+  afterImageUrl: "",
+});
 
-const verificationPreviewItems = [
-  "신원 확인 예정",
-  "경력 검토 예정",
-  "자격 검토 예정",
-  "인터뷰 검토 예정",
-  "사례 검토 예정",
-];
-
-function RegisterStatusShell({
-  eyebrow,
-  title,
-  description,
-  children,
-  tone = "green",
-}: {
-  eyebrow: string;
-  title: string;
-  description: string;
-  children?: React.ReactNode;
-  tone?: "green" | "coral";
-}) {
+function RequiredBadge() {
   return (
-    <main className="min-h-screen bg-[#F6F3EC] px-4 py-6 text-[#111111] sm:px-6 lg:px-10">
-      <div className="mx-auto w-full max-w-7xl">
-        <header className="mb-6 flex items-center justify-between gap-4">
-          <Link
-            href="/"
-            className="text-2xl font-extrabold tracking-[0.16em] text-[#111111]"
-          >
-            TRUPICK
-          </Link>
-          <Link
-            href="/pricing"
-            className="rounded-full border border-[#D9CFBF] bg-white px-4 py-2 text-sm font-black text-[#0F5132] transition hover:border-[#111111]"
-          >
-            플랜 보기
-          </Link>
-        </header>
-
-        <section className="grid gap-6 lg:grid-cols-[65fr_35fr] lg:items-start">
-          <div className="rounded-[8px] border border-[#E5E7EB] bg-white p-6 shadow-[0_24px_80px_rgba(24,24,20,0.08)] sm:p-8 lg:p-10">
-            <p
-              className={`text-sm font-black uppercase tracking-[0.2em] ${
-                tone === "coral" ? "text-[#D65339]" : "text-[#0F5132]"
-              }`}
-            >
-              {eyebrow}
-            </p>
-            <h1 className="mt-3 text-4xl font-black tracking-normal text-[#111111] sm:text-5xl">
-              {title}
-            </h1>
-            <p className="mt-4 max-w-2xl text-base font-bold leading-7 text-[#374151]">
-              {description}
-            </p>
-            {children ? <div className="mt-8">{children}</div> : null}
-          </div>
-
-          <aside className="rounded-[8px] border border-[#E5E7EB] bg-white p-6 shadow-[0_24px_80px_rgba(24,24,20,0.08)] lg:sticky lg:top-6">
-            <p className="text-sm font-black uppercase tracking-[0.18em] text-[#0F5132]">
-              Review Process
-            </p>
-            <h2 className="mt-3 text-3xl font-black text-[#111111]">
-              검증 안내
-            </h2>
-            <div className="mt-6 grid gap-4">
-              {verificationSteps.map((item, index) => (
-                <div key={item} className="rounded-[8px] bg-[#FBFAF7] p-4">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#0F5132] text-sm font-black text-white">
-                    {index + 1}
-                  </span>
-                  <p className="mt-3 text-sm font-black leading-6 text-[#111111]">
-                    {item}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </aside>
-        </section>
-      </div>
-    </main>
+    <span className="rounded-full bg-[#111111] px-2 py-1 text-[10px] font-black text-white">
+      필수
+    </span>
   );
 }
 
-function FieldLabel({ children }: { children: React.ReactNode }) {
-  return <label className="text-sm font-black text-[#111111]">{children}</label>;
+function OptionalBadge() {
+  return (
+    <span className="rounded-full bg-[#E5E7EB] px-2 py-1 text-[10px] font-black text-[#374151]">
+      선택
+    </span>
+  );
+}
+
+function FieldLabel({
+  children,
+  required = false,
+}: {
+  children: React.ReactNode;
+  required?: boolean;
+}) {
+  return (
+    <label className="flex items-center gap-2 text-sm font-black text-[#111111]">
+      {children}
+      {required ? <RequiredBadge /> : <OptionalBadge />}
+    </label>
+  );
 }
 
 function TextInput({
@@ -128,7 +125,7 @@ function TextInput({
       value={value}
       onChange={(event) => onChange(event.target.value)}
       placeholder={placeholder}
-      className="mt-2 min-h-12 w-full rounded-[8px] border border-[#D9CFBF] bg-[#FBFAF7] px-4 text-sm font-bold text-[#111111] outline-none placeholder:text-[#9CA3AF] focus:border-[#111111]"
+      className="mt-2 min-h-12 w-full rounded-[8px] border border-[#D9CFBF] bg-white px-4 text-sm font-bold text-[#111111] outline-none placeholder:text-[#9CA3AF] focus:border-[#111111]"
     />
   );
 }
@@ -137,7 +134,7 @@ function TextArea({
   value,
   onChange,
   placeholder,
-  rows = 5,
+  rows = 4,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -150,62 +147,100 @@ function TextArea({
       onChange={(event) => onChange(event.target.value)}
       placeholder={placeholder}
       rows={rows}
-      className="mt-2 w-full resize-y rounded-[8px] border border-[#D9CFBF] bg-[#FBFAF7] px-4 py-3 text-sm font-bold leading-7 text-[#111111] outline-none placeholder:text-[#9CA3AF] focus:border-[#111111]"
+      className="mt-2 w-full resize-y rounded-[8px] border border-[#D9CFBF] bg-white px-4 py-3 text-sm font-bold leading-7 text-[#111111] outline-none placeholder:text-[#9CA3AF] focus:border-[#111111]"
     />
   );
+}
+
+function splitList(value: string) {
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function stringifyCertifications(value: ExistingExpert["certifications"]) {
+  if (Array.isArray(value)) {
+    return value.join(", ");
+  }
+
+  return value || "";
+}
+
+function getStatusLabel(status: ExpertStatus | null | undefined) {
+  if (status === "draft") return "임시 저장";
+  if (status === "approved") return "승인 완료";
+  if (status === "rejected") return "거절";
+  if (status === "pending_review") return "재검토 대기";
+  return "검토 대기";
 }
 
 export default function RegisterPage() {
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [location, setLocation] = useState("");
-  const [specialty, setSpecialty] = useState("");
-  const [consultationMethods, setConsultationMethods] = useState<string[]>([]);
-  const [careerYears, setCareerYears] = useState("");
-  const [careerHighlights, setCareerHighlights] = useState("");
-  const [certifications, setCertifications] = useState("");
-  const [certificationFile, setCertificationFile] = useState<File | null>(null);
-  const [portfolioUrl, setPortfolioUrl] = useState("");
-  const [snsUrl, setSnsUrl] = useState("");
-  const [oneLineIntro, setOneLineIntro] = useState("");
-  const [philosophy, setPhilosophy] = useState("");
-  const [caseTitle, setCaseTitle] = useState("");
-  const [caseProblem, setCaseProblem] = useState("");
-  const [caseProcess, setCaseProcess] = useState("");
-  const [caseResult, setCaseResult] = useState("");
-  const [submitted, setSubmitted] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [accessDenied, setAccessDenied] = useState(false);
-  const planType = "free" as const;
+  const [expertId, setExpertId] = useState<number | null>(null);
+  const [currentStatus, setCurrentStatus] = useState<ExpertStatus | null>(null);
+  const [message, setMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+  const [savingMode, setSavingMode] = useState<SaveMode | null>(null);
+
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [activityArea, setActivityArea] = useState("");
+  const [detailedLocation, setDetailedLocation] = useState("");
+  const [centerName, setCenterName] = useState("");
+  const [mapAddress, setMapAddress] = useState("");
+  const [latitude, setLatitude] = useState("");
+  const [longitude, setLongitude] = useState("");
+  const [specialty, setSpecialty] = useState("");
+  const [consultationMethods, setConsultationMethods] = useState<string[]>([]);
+  const [consultationFee, setConsultationFee] = useState("");
+  const [profileImages, setProfileImages] = useState<string[]>([]);
+  const [imageInput, setImageInput] = useState("");
+  const [mainProfileImage, setMainProfileImage] = useState("");
+  const [careerYears, setCareerYears] = useState("");
+  const [careerSummary, setCareerSummary] = useState("");
+  const [certifications, setCertifications] = useState("");
+  const [portfolioUrl, setPortfolioUrl] = useState("");
+  const [snsUrl, setSnsUrl] = useState("");
+  const [videoUrl, setVideoUrl] = useState("");
+  const [introLine, setIntroLine] = useState("");
+  const [philosophy, setPhilosophy] = useState("");
+  const [extraIntro, setExtraIntro] = useState("");
+  const [cases, setCases] = useState<ExpertCase[]>([]);
 
   useEffect(() => {
     let isMounted = true;
 
-    async function checkSession() {
+    async function loadSessionAndDraft() {
       try {
         const supabase = getSupabaseBrowserClient();
-        const { data } = await supabase.auth.getSession();
-        const user = data.session?.user ?? null;
+        const { data: sessionData, error: sessionError } =
+          await supabase.auth.getSession();
 
-        if (!isMounted) {
-          return;
+        if (sessionError) {
+          console.error("register session error", sessionError);
         }
+
+        const user = sessionData.session?.user ?? null;
+
+        if (!isMounted) return;
 
         if (!user) {
           router.replace("/login?redirect=/register");
           return;
         }
 
-        const { data: profile } = await supabase
+        const { data: profile, error: profileError } = await supabase
           .from("profiles")
           .select("role")
           .eq("id", user.id)
           .maybeSingle<{ role: UserRole }>();
 
-        if (!isMounted) {
-          return;
+        if (profileError) {
+          console.error("register profile lookup error", profileError);
         }
 
         const role =
@@ -217,82 +252,129 @@ export default function RegisterPage() {
           return;
         }
 
-        setCheckingAuth(false);
+        const { data: existing, error: expertError } = await supabase
+          .from("experts")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("id", { ascending: false })
+          .limit(1)
+          .maybeSingle<ExistingExpert>();
+
+        if (expertError) {
+          console.error("register existing expert lookup error", expertError);
+        }
+
+        if (existing && isMounted) {
+          setExpertId(existing.id);
+          setCurrentStatus(existing.approval_status ?? existing.status ?? null);
+          setName(existing.name ?? "");
+          setPhone(existing.phone ?? "");
+          setActivityArea(existing.activity_area ?? existing.location ?? "");
+          setDetailedLocation(existing.detailed_location ?? "");
+          setCenterName(existing.center_name ?? "");
+          setMapAddress(existing.map_address ?? "");
+          setLatitude(existing.latitude ? String(existing.latitude) : "");
+          setLongitude(existing.longitude ? String(existing.longitude) : "");
+          setSpecialty(
+            existing.specialties?.length
+              ? existing.specialties.join(", ")
+              : existing.specialty ?? ""
+          );
+          setCareerYears(existing.career_years ?? "");
+          setCareerSummary(existing.career_summary ?? existing.career ?? "");
+          setCertifications(stringifyCertifications(existing.certifications));
+          setProfileImages(
+            existing.profile_images?.length
+              ? existing.profile_images
+              : existing.image_url
+                ? [existing.image_url]
+                : []
+          );
+          setMainProfileImage(
+            existing.main_profile_image ?? existing.image_url ?? ""
+          );
+          setIntroLine(existing.intro_line ?? "");
+          setPhilosophy(existing.philosophy ?? "");
+          setCases(Array.isArray(existing.cases) ? existing.cases : []);
+          setConsultationMethods(existing.consultation_methods ?? []);
+          setConsultationFee(existing.consultation_fee ?? "");
+          setPortfolioUrl(existing.portfolio_url ?? "");
+          setSnsUrl(existing.sns_url ?? "");
+          setVideoUrl(existing.video_url ?? "");
+          setExtraIntro(existing.extra_intro ?? "");
+        }
+
+        if (isMounted) setCheckingAuth(false);
       } catch (error) {
-        console.error(error);
-        setCheckingAuth(false);
+        console.error("register load error", error);
+        if (isMounted) {
+          setErrorMessage("전문가 등록 정보를 불러오지 못했습니다. 콘솔의 오류를 확인해주세요.");
+          setCheckingAuth(false);
+        }
       }
     }
 
-    void checkSession();
+    void loadSessionAndDraft();
 
     return () => {
       isMounted = false;
     };
   }, [router]);
 
-  const completionItems = useMemo(
-    () => [
-      {
-        label: "기본 정보",
-        complete: Boolean(
-          name &&
-            phone &&
-            location &&
-            specialty &&
-            consultationMethods.length > 0
-        ),
-      },
-      {
-        label: "전문성",
-        complete: Boolean(careerYears && careerHighlights && certifications),
-      },
-      {
-        label: "소개",
-        complete: Boolean(oneLineIntro && philosophy && caseTitle && caseProblem && caseProcess && caseResult),
-      },
-    ],
-    [
-      careerHighlights,
-      careerYears,
-      caseProblem,
-      caseProcess,
-      caseResult,
-      caseTitle,
-      certifications,
-      consultationMethods.length,
-      location,
-      name,
-      oneLineIntro,
-      phone,
-      philosophy,
-      specialty,
-    ]
+  const requiredReady = Boolean(
+    name.trim() &&
+      phone.trim() &&
+      activityArea.trim() &&
+      specialty.trim() &&
+      introLine.trim()
   );
 
-  const completenessScore = useMemo(() => {
-    const completed = completionItems.filter((item) => item.complete).length;
+  const completion = useMemo(() => {
+    let score = 0;
+    const missing: string[] = [];
 
-    return Math.round((completed / completionItems.length) * 100);
-  }, [completionItems]);
+    const basicFields = [name, phone, activityArea, introLine];
+    score += Math.round(
+      (basicFields.filter((value) => value.trim()).length / basicFields.length) *
+        30
+    );
 
-  const improvementTips = useMemo(() => {
-    const tips: string[] = [];
+    if (specialty.trim()) score += 20;
+    else missing.push("전문 분야를 1개 이상 입력해주세요.");
 
-    if (!completionItems[0].complete) {
-      tips.push("기본 정보와 상담 방식을 입력하면 고객이 빠르게 판단할 수 있습니다.");
+    if (profileImages.length > 0) score += 15;
+    else missing.push("프로필 사진을 추가하면 신뢰도가 높아집니다.");
+
+    if (careerYears.trim() || careerSummary.trim() || certifications.trim()) {
+      score += 15;
+    } else {
+      missing.push("자격/교육 이력을 작성하면 검토가 빨라집니다.");
     }
 
-    if (!completionItems[1].complete) {
-      tips.push("경력과 자격/교육 이력을 입력하면 전문성이 더 선명해집니다.");
+    if (cases.some((item) => item.title.trim() || item.result.trim())) {
+      score += 20;
+    } else {
+      missing.push("대표 사례를 추가하면 고객이 더 쉽게 판단할 수 있습니다.");
     }
 
-    if (!completionItems[2].complete) {
-      tips.push("한 줄 소개, 철학, 대표 사례를 입력하면 고객이 더 쉽게 선택할 수 있습니다.");
-    }
+    if (!name.trim()) missing.push("이름은 필수입니다.");
+    if (!phone.trim()) missing.push("연락처는 필수입니다.");
+    if (!activityArea.trim()) missing.push("주요 활동 지역은 필수입니다.");
+    if (!introLine.trim()) missing.push("고객에게 보여줄 한 문장은 필수입니다.");
 
-    return tips;
-  }, [completionItems]);
+    return { score: Math.min(score, 100), missing };
+  }, [
+    activityArea,
+    careerSummary,
+    careerYears,
+    cases,
+    certifications,
+    introLine,
+    name,
+    phone,
+    profileImages.length,
+    specialty,
+  ]);
 
   function toggleConsultationMethod(method: string) {
     setConsultationMethods((current) =>
@@ -302,233 +384,287 @@ export default function RegisterPage() {
     );
   }
 
-  function resetForm() {
-    setCurrentStep(1);
-    setName("");
-    setPhone("");
-    setLocation("");
-    setSpecialty("");
-    setConsultationMethods([]);
-    setCareerYears("");
-    setCareerHighlights("");
-    setCertifications("");
-    setCertificationFile(null);
-    setPortfolioUrl("");
-    setSnsUrl("");
-    setOneLineIntro("");
-    setPhilosophy("");
-    setCaseTitle("");
-    setCaseProblem("");
-    setCaseProcess("");
-    setCaseResult("");
+  function addProfileImage(url = imageInput.trim()) {
+    if (!url) return;
+    setProfileImages((current) => {
+      if (current.includes(url)) return current;
+      const next = [...current, url];
+      if (!mainProfileImage) setMainProfileImage(url);
+      return next;
+    });
+    setImageInput("");
   }
 
-  function validateStep(step = currentStep) {
-    if (
-      step === 1 &&
-      (!name.trim() ||
-        !phone.trim() ||
-        !location.trim() ||
-        !specialty.trim() ||
-        consultationMethods.length === 0)
-    ) {
-      alert("이름, 연락처, 활동 지역, 전문 분야, 상담 방식을 입력해주세요.");
-      return false;
+  async function uploadProfileImage(file: File) {
+    setErrorMessage("");
+    try {
+      const supabase = getSupabaseBrowserClient();
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData.user?.id;
+
+      if (!userId) {
+        setErrorMessage("로그인 정보를 찾을 수 없습니다. 다시 로그인해주세요.");
+        return;
+      }
+
+      const path = `${userId}/profile-${Date.now()}-${file.name}`;
+      const { error } = await supabase.storage
+        .from("expert-assets")
+        .upload(path, file, { upsert: false });
+
+      if (error) {
+        console.error("profile image upload error", error);
+        setErrorMessage(`사진 업로드 실패: ${error.message}`);
+        return;
+      }
+
+      const { data } = supabase.storage.from("expert-assets").getPublicUrl(path);
+      addProfileImage(data.publicUrl);
+    } catch (error) {
+      console.error("profile image upload unexpected error", error);
+      setErrorMessage("사진 업로드 중 예상치 못한 오류가 발생했습니다.");
+    }
+  }
+
+  function removeProfileImage(url: string) {
+    setProfileImages((current) => current.filter((item) => item !== url));
+    if (mainProfileImage === url) {
+      setMainProfileImage(profileImages.find((item) => item !== url) ?? "");
+    }
+  }
+
+  function updateCase(id: string, key: keyof ExpertCase, value: string) {
+    setCases((current) =>
+      current.map((item) => (item.id === id ? { ...item, [key]: value } : item))
+    );
+  }
+
+  function validateSubmit(mode: SaveMode) {
+    if (mode === "draft") {
+      if (!name.trim()) {
+        setErrorMessage("임시 저장을 위해 이름은 입력해주세요.");
+        setCurrentStep(1);
+        return false;
+      }
+
+      return true;
     }
 
-    if (
-      step === 2 &&
-      (!careerYears.trim() ||
-        !careerHighlights.trim() ||
-        !certifications.trim())
-    ) {
-      alert("경력 년수, 주요 경력, 자격증/교육 이력을 입력해주세요.");
-      return false;
-    }
-
-    if (
-      step === 3 &&
-      (!oneLineIntro.trim() ||
-        !philosophy.trim() ||
-        !caseTitle.trim() ||
-        !caseProblem.trim() ||
-        !caseProcess.trim() ||
-        !caseResult.trim())
-    ) {
-      alert("한 줄 소개, 전문가 철학, 대표 사례를 입력해주세요.");
+    if (!requiredReady) {
+      setErrorMessage(
+        "검증 신청 제출에는 이름, 연락처, 주요 활동 지역, 전문 분야, 고객에게 보여줄 한 문장이 필요합니다."
+      );
+      setCurrentStep(1);
       return false;
     }
 
     return true;
   }
 
-  function goNext() {
-    if (!validateStep()) {
-      return;
-    }
+  async function saveExpertApplication(mode: SaveMode) {
+    setMessage("");
+    setErrorMessage("");
 
-    setCurrentStep((step) => Math.min(step + 1, wizardSteps.length));
-  }
+    if (!validateSubmit(mode)) return;
 
-  function goBack() {
-    setCurrentStep((step) => Math.max(step - 1, 1));
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-
-    for (let step = 1; step <= 3; step += 1) {
-      if (!validateStep(step)) {
-        setCurrentStep(step);
-        return;
-      }
-    }
+    setSavingMode(mode);
 
     try {
       const supabase = getSupabaseBrowserClient();
-      const { data: userData } = await supabase.auth.getUser();
+      const { data: userData, error: userError } = await supabase.auth.getUser();
 
-      const certificationItems = certifications
-        .split(",")
-        .map((item) => item.trim())
-        .filter(Boolean);
-
-      if (certificationFile) {
-        certificationItems.push(`증빙 파일: ${certificationFile.name}`);
+      if (userError) {
+        console.error("register getUser error", userError);
       }
 
-      const career = [
-        `경력 년수: ${careerYears.trim()}`,
-        `주요 경력: ${careerHighlights.trim()}`,
-      ].join("\n\n");
+      const userId = userData.user?.id;
 
-      const description = [
+      if (!userId) {
+        setErrorMessage("로그인 정보를 찾을 수 없습니다. 다시 로그인해주세요.");
+        setSavingMode(null);
+        return;
+      }
+
+      const nextStatus: ExpertStatus =
+        mode === "draft"
+          ? currentStatus === "approved"
+            ? "pending_review"
+            : "draft"
+          : currentStatus === "approved"
+            ? "pending_review"
+            : "pending";
+      const specialtyItems = splitList(specialty);
+      const filteredCases = cases.filter(
+        (item) =>
+          item.title.trim() ||
+          item.problem.trim() ||
+          item.process.trim() ||
+          item.result.trim()
+      );
+      const mainImage = mainProfileImage || profileImages[0] || "";
+      const locationLabel = [activityArea.trim(), detailedLocation.trim()]
+        .filter(Boolean)
+        .join(" · ");
+
+      const legacyCareer = [
+        careerYears.trim() ? `경력 년수: ${careerYears.trim()}` : "",
+        careerSummary.trim() ? `주요 경력: ${careerSummary.trim()}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n\n");
+      const legacyDescription = [
         "연락처",
         phone.trim(),
         "",
         "상담 방식",
         consultationMethods.join(", "),
         "",
+        "상담비",
+        consultationFee.trim(),
+        "",
         "한 줄 소개",
-        oneLineIntro.trim(),
+        introLine.trim(),
         "",
         "전문가 철학",
         philosophy.trim(),
         "",
         "대표 사례",
-        `제목: ${caseTitle.trim()}`,
-        `고객 문제: ${caseProblem.trim()}`,
-        `진행 과정: ${caseProcess.trim()}`,
-        `결과: ${caseResult.trim()}`,
+        filteredCases
+          .map(
+            (item, index) =>
+              `${index + 1}. ${item.title}\n고객 문제: ${item.problem}\n진행 과정: ${item.process}\n결과: ${item.result}\n기간: ${item.duration}`
+          )
+          .join("\n\n"),
       ].join("\n");
 
-      const { error: submitError } = await supabase.from("experts").insert([
-        {
-          name: name.trim(),
-          specialty: specialty.trim(),
-          location: location.trim(),
-          description,
-          career,
-          certifications: certificationItems,
-          portfolio_url: portfolioUrl.trim(),
-          sns_url: snsUrl.trim(),
-          image_url: null,
-          plan_type: planType,
-          approved: false,
-          approval_status: "pending",
-          status: "pending",
-          user_id: userData.user?.id ?? null,
-        },
-      ]);
+      const payload = {
+        user_id: userId,
+        name: name.trim(),
+        phone: phone.trim(),
+        location: locationLabel || activityArea.trim(),
+        activity_area: activityArea.trim(),
+        detailed_location: detailedLocation.trim(),
+        center_name: centerName.trim(),
+        map_address: mapAddress.trim(),
+        latitude: latitude.trim() ? Number(latitude) : null,
+        longitude: longitude.trim() ? Number(longitude) : null,
+        specialty: specialtyItems[0] ?? specialty.trim(),
+        specialties: specialtyItems,
+        career_years: careerYears.trim(),
+        career_summary: careerSummary.trim(),
+        career: legacyCareer,
+        certifications: splitList(certifications),
+        profile_images: profileImages,
+        main_profile_image: mainImage,
+        image_url: mainImage || null,
+        intro_line: introLine.trim(),
+        philosophy: philosophy.trim(),
+        description: legacyDescription,
+        cases: filteredCases,
+        consultation_methods: consultationMethods,
+        consultation_fee: consultationFee.trim(),
+        portfolio_url: portfolioUrl.trim(),
+        sns_url: snsUrl.trim(),
+        video_url: videoUrl.trim(),
+        extra_intro: extraIntro.trim(),
+        profile_completion_score: completion.score,
+        plan_type: "free",
+        approved: false,
+        approval_status: nextStatus,
+        status: nextStatus,
+      };
 
-      if (submitError) {
-        console.error(submitError);
-        alert(getFriendlyErrorMessage(submitError.message));
+      const { data, error } = expertId
+        ? await supabase
+            .from("experts")
+            .update(payload)
+            .eq("id", expertId)
+            .select("id, approval_status")
+            .maybeSingle<{ id: number; approval_status: ExpertStatus }>()
+        : await supabase
+            .from("experts")
+            .insert([payload])
+            .select("id, approval_status")
+            .maybeSingle<{ id: number; approval_status: ExpertStatus }>();
+
+      if (error) {
+        console.error("expert application save error", error);
+        setErrorMessage(getFriendlyErrorMessage(error.message));
+        setSavingMode(null);
         return;
+      }
+
+      if (data?.id) {
+        setExpertId(data.id);
+        setCurrentStatus(data.approval_status ?? nextStatus);
       }
 
       void trackAnalyticsEvent({
         eventName: "expert_register",
         page: "/register",
         metadata: {
-          plan_type: planType,
+          mode,
+          status: nextStatus,
           specialty: specialty.trim(),
-          location: location.trim(),
-          consultation_methods: consultationMethods.join(", "),
+          profile_completion_score: completion.score,
         },
       });
-      setSubmitted(true);
+
+      setMessage(
+        mode === "draft"
+          ? "임시 저장되었습니다. 마이페이지에서 이어서 수정할 수 있습니다."
+          : "전문가 등록 신청이 접수되었습니다. TRUPICK 팀이 검토 후 승인 여부를 안내드립니다."
+      );
+
+      if (mode === "pending") {
+        router.push("/mypage");
+      }
     } catch (error) {
-      console.error(error);
-      alert("전문가 등록 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.");
+      console.error("expert application unexpected error", error);
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "전문가 등록 중 예상치 못한 오류가 발생했습니다."
+      );
+    } finally {
+      setSavingMode(null);
     }
   }
 
   if (checkingAuth) {
     return (
-      <RegisterStatusShell
-        eyebrow="Checking Session"
-        title="로그인 상태를 확인하고 있습니다."
-        description="전문가 등록은 로그인한 사용자만 이용할 수 있습니다."
-      />
+      <main className="min-h-screen bg-[#F6F3EC] px-4 py-10 text-[#111111]">
+        <section className="mx-auto max-w-3xl rounded-[8px] border border-[#E5E7EB] bg-white p-8">
+          <p className="text-sm font-black uppercase tracking-[0.18em] text-[#0F5132]">
+            Checking Session
+          </p>
+          <h1 className="mt-3 text-3xl font-black">로그인 상태를 확인하고 있습니다.</h1>
+        </section>
+      </main>
     );
   }
 
   if (accessDenied) {
     return (
-      <RegisterStatusShell
-        eyebrow="Expert Only"
-        title="전문가 회원만 등록 가능합니다"
-        description="현재 계정은 고객 회원입니다. 전문가 등록이 필요하다면 전문가 계정으로 가입하거나 관리자에게 권한 변경을 요청해주세요."
-        tone="coral"
-      >
-        <div className="flex flex-wrap gap-3">
-          <Link
-            href="/experts"
-            className="rounded-full bg-[#111111] px-6 py-3 text-sm font-black text-white transition hover:bg-[#0F5132]"
-          >
-            전문가 둘러보기
-          </Link>
-          <Link
-            href="/signup"
-            className="rounded-full border border-[#E5E7EB] bg-white px-6 py-3 text-sm font-black text-[#111111] transition hover:border-[#111111]"
-          >
-            전문가 계정 만들기
-          </Link>
-        </div>
-      </RegisterStatusShell>
-    );
-  }
-
-  if (submitted) {
-    return (
-      <RegisterStatusShell
-        eyebrow="Registration Submitted"
-        title="전문가 등록 신청이 접수되었습니다."
-        description="TRUPICK 팀이 경력, 전문 분야, 대표 사례를 검토한 뒤 승인 여부를 안내드립니다."
-      >
-        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#0F5132] text-xl font-black text-white">
-          ✓
-        </div>
-        <div className="mt-7 flex flex-wrap gap-3">
-          <Link
-            href="/mypage"
-            className="rounded-full bg-[#111111] px-6 py-3 text-sm font-black text-white transition hover:bg-[#0F5132]"
-          >
-            마이페이지로 이동
-          </Link>
-          <button
-            type="button"
-            onClick={() => {
-              setSubmitted(false);
-              resetForm();
-            }}
-            className="rounded-full border border-[#E5E7EB] bg-white px-6 py-3 text-sm font-black text-[#111111] transition hover:border-[#111111]"
-          >
-            추가 등록
-          </button>
-        </div>
-      </RegisterStatusShell>
+      <main className="min-h-screen bg-[#F6F3EC] px-4 py-10 text-[#111111]">
+        <section className="mx-auto max-w-3xl rounded-[8px] border border-[#E5E7EB] bg-white p-8">
+          <p className="text-sm font-black uppercase tracking-[0.18em] text-[#D65339]">
+            Expert Only
+          </p>
+          <h1 className="mt-3 text-3xl font-black">전문가 회원만 등록 가능합니다</h1>
+          <p className="mt-3 text-sm font-bold leading-7 text-[#374151]">
+            현재 계정은 고객 회원입니다. 전문가로 활동하려면 전문가 계정으로 가입하거나 관리자에게 권한 변경을 요청해주세요.
+          </p>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Link href="/signup" className="rounded-full bg-[#0F5132] px-5 py-3 text-sm font-black text-white">
+              전문가 계정 만들기
+            </Link>
+            <Link href="/experts" className="rounded-full border border-[#D9CFBF] bg-white px-5 py-3 text-sm font-black text-[#111111]">
+              전문가 둘러보기
+            </Link>
+          </div>
+        </section>
+      </main>
     );
   }
 
@@ -537,18 +673,12 @@ export default function RegisterPage() {
   return (
     <main className="min-h-screen bg-[#F6F3EC] px-4 py-6 text-[#111111] sm:px-6 lg:px-10">
       <div className="mx-auto w-full max-w-7xl">
-        <header className="mb-6 flex items-center justify-between gap-4">
-          <Link
-            href="/"
-            className="text-2xl font-extrabold tracking-[0.16em] text-[#111111]"
-          >
+        <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <Link href="/" className="text-2xl font-extrabold tracking-[0.16em]">
             TRUPICK
           </Link>
-          <Link
-            href="/pricing"
-            className="rounded-full border border-[#D9CFBF] bg-white px-4 py-2 text-sm font-black text-[#0F5132]"
-          >
-            플랜 보기
+          <Link href="/mypage" className="w-fit rounded-full border border-[#D9CFBF] bg-white px-4 py-2 text-sm font-black text-[#0F5132]">
+            마이페이지
           </Link>
         </header>
 
@@ -557,13 +687,17 @@ export default function RegisterPage() {
             <p className="text-sm font-black uppercase tracking-[0.2em] text-[#0F5132]">
               Verified Expert Application
             </p>
-            <h1 className="mt-3 text-4xl font-black tracking-[-0.03em] text-[#111111] sm:text-5xl">
+            <h1 className="mt-3 max-w-3xl text-4xl font-black leading-tight tracking-[-0.02em] sm:text-5xl">
               TRUPICK 검증 전문가로 등록하기
             </h1>
             <p className="mt-4 max-w-2xl text-base font-bold leading-7 text-[#374151]">
-              경력, 전문 분야, 대표 사례를 바탕으로 전문가 프로필을 구성하고
-              TRUPICK 검토를 거쳐 노출됩니다.
+              최소 정보만 입력해도 신청할 수 있습니다. 부족한 정보는 프로필 완성도로 확인하고, 마이페이지에서 계속 보완하세요.
             </p>
+            {currentStatus ? (
+              <span className="mt-5 inline-flex rounded-full bg-[#E8F2EC] px-4 py-2 text-sm font-black text-[#0F5132]">
+                현재 상태: {getStatusLabel(currentStatus)}
+              </span>
+            ) : null}
 
             <div className="mt-8 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
               {wizardSteps.map((step) => (
@@ -577,408 +711,346 @@ export default function RegisterPage() {
                       : "border-[#E5E7EB] bg-[#FBFAF7]"
                   }`}
                 >
-                  <span className="text-xs font-black text-[#0F5132]">
-                    {step.id}
-                  </span>
-                  <span className="mt-1 block text-xs font-black leading-5 text-[#111111]">
-                    {step.label}
-                  </span>
+                  <span className="text-xs font-black text-[#0F5132]">{step.id}</span>
+                  <span className="mt-1 block text-xs font-black leading-5">{step.label}</span>
                 </button>
               ))}
             </div>
 
-            <form onSubmit={handleSubmit} className="mt-8">
-              <div className="rounded-[8px] border border-[#E5E7EB] bg-[#FBFAF7] p-5 sm:p-6">
-                <p className="text-sm font-black uppercase tracking-[0.18em] text-[#0F5132]">
-                  Step {activeStep.id}
-                </p>
-                <h2 className="mt-2 text-3xl font-black tracking-[-0.03em] text-[#111111]">
-                  {activeStep.title}
-                </h2>
+            {message ? (
+              <div className="mt-5 rounded-[8px] border border-[#B7E3C9] bg-[#E8F2EC] p-4 text-sm font-black text-[#0F5132]">
+                {message}
+              </div>
+            ) : null}
+            {errorMessage ? (
+              <div className="mt-5 rounded-[8px] border border-[#FCA5A5] bg-[#FEE2E2] p-4 text-sm font-black text-[#991B1B]">
+                {errorMessage}
+              </div>
+            ) : null}
 
-                {currentStep === 1 ? (
-                  <div className="mt-6 grid gap-5">
-                    <div>
-                      <FieldLabel>이름</FieldLabel>
-                      <TextInput
-                        value={name}
-                        onChange={setName}
-                        placeholder="김영재"
-                      />
-                    </div>
-                    <div>
-                      <FieldLabel>연락처</FieldLabel>
-                      <TextInput
-                        value={phone}
-                        onChange={setPhone}
-                        placeholder="010-0000-0000"
-                        type="tel"
-                      />
-                    </div>
-                    <div className="grid gap-5 sm:grid-cols-2">
-                      <div>
-                        <FieldLabel>활동 지역</FieldLabel>
-                        <TextInput
-                          value={location}
-                          onChange={setLocation}
-                          placeholder="서울 강남구"
-                        />
-                      </div>
-                      <div>
-                        <FieldLabel>세부 분야</FieldLabel>
-                        <TextInput
-                          value={specialty}
-                          onChange={setSpecialty}
-                          placeholder="재활운동 · 통증관리"
-                        />
-                      </div>
-                    </div>
-                    <section>
-                      <FieldLabel>상담 방식</FieldLabel>
-                      <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                        {consultationOptions.map((method) => {
-                          const selected = consultationMethods.includes(method);
+            <div className="mt-8 rounded-[8px] border border-[#E5E7EB] bg-[#FBFAF7] p-5 sm:p-6">
+              <p className="text-sm font-black uppercase tracking-[0.18em] text-[#0F5132]">
+                Step {activeStep.id}
+              </p>
+              <h2 className="mt-2 text-3xl font-black tracking-[-0.02em]">
+                {activeStep.title}
+              </h2>
 
-                          return (
-                            <button
-                              key={method}
-                              type="button"
-                              onClick={() => toggleConsultationMethod(method)}
-                              className={`rounded-[8px] border p-4 text-left text-sm font-black transition hover:-translate-y-0.5 ${
-                                selected
-                                  ? "border-[#0F5132] bg-white text-[#0F5132]"
-                                  : "border-[#D9CFBF] bg-white text-[#111111]"
-                              }`}
-                            >
-                              {method}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </section>
+              {currentStep === 1 ? (
+                <div className="mt-6 grid gap-5">
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <div>
+                      <FieldLabel required>이름</FieldLabel>
+                      <TextInput value={name} onChange={setName} placeholder="김영재" />
+                    </div>
+                    <div>
+                      <FieldLabel required>연락처</FieldLabel>
+                      <TextInput value={phone} onChange={setPhone} placeholder="010-0000-0000" type="tel" />
+                    </div>
                   </div>
-                ) : null}
+                  <div>
+                    <FieldLabel required>고객에게 보여줄 한 문장</FieldLabel>
+                    <TextInput value={introLine} onChange={setIntroLine} placeholder="통증 없이 움직이는 몸을 만드는 재활운동 코치" />
+                  </div>
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <div>
+                      <FieldLabel required>주요 활동 지역</FieldLabel>
+                      <TextInput value={activityArea} onChange={setActivityArea} placeholder="서울 강남구" />
+                    </div>
+                    <div>
+                      <FieldLabel>상세 위치 설명</FieldLabel>
+                      <TextInput value={detailedLocation} onChange={setDetailedLocation} placeholder="선릉역 인근" />
+                    </div>
+                  </div>
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <div>
+                      <FieldLabel>센터명 또는 활동 장소</FieldLabel>
+                      <TextInput value={centerName} onChange={setCenterName} placeholder="TRUPICK 퍼포먼스 센터" />
+                    </div>
+                    <div>
+                      <FieldLabel>지도 표시용 주소</FieldLabel>
+                      <TextInput value={mapAddress} onChange={setMapAddress} placeholder="서울 강남구 테헤란로 ..." />
+                    </div>
+                  </div>
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <div>
+                      <FieldLabel>위도</FieldLabel>
+                      <TextInput value={latitude} onChange={setLatitude} placeholder="37.501" type="number" />
+                    </div>
+                    <div>
+                      <FieldLabel>경도</FieldLabel>
+                      <TextInput value={longitude} onChange={setLongitude} placeholder="127.039" type="number" />
+                    </div>
+                  </div>
+                  <div>
+                    <FieldLabel required>전문 분야 1개 이상</FieldLabel>
+                    <TextInput value={specialty} onChange={setSpecialty} placeholder="재활운동, 통증관리, 체형교정" />
+                  </div>
+                  <section>
+                    <FieldLabel>상담 방식</FieldLabel>
+                    <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                      {consultationOptions.map((method) => {
+                        const selected = consultationMethods.includes(method);
+                        return (
+                          <button
+                            key={method}
+                            type="button"
+                            onClick={() => toggleConsultationMethod(method)}
+                            className={`rounded-[8px] border p-4 text-left text-sm font-black transition ${
+                              selected
+                                ? "border-[#0F5132] bg-white text-[#0F5132]"
+                                : "border-[#D9CFBF] bg-white text-[#111111]"
+                            }`}
+                          >
+                            {method}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
+                  <div>
+                    <FieldLabel>상담비</FieldLabel>
+                    <TextInput value={consultationFee} onChange={setConsultationFee} placeholder="예: 첫 상담 무료 / 1회 50,000원" />
+                  </div>
+                </div>
+              ) : null}
 
-                {currentStep === 2 ? (
-                  <div className="mt-6 grid gap-5">
+              {currentStep === 2 ? (
+                <div className="mt-6 grid gap-5">
+                  <div>
+                    <FieldLabel>전문가로 활동한 기간</FieldLabel>
+                    <TextInput value={careerYears} onChange={setCareerYears} placeholder="예: 8년" />
+                  </div>
+                  <div>
+                    <FieldLabel>대표 경력 및 활동 이력</FieldLabel>
+                    <TextArea value={careerSummary} onChange={setCareerSummary} placeholder="운동센터 운영, 재활 지도 경험, 교육 이력 등을 입력해주세요." />
+                  </div>
+                  <div>
+                    <FieldLabel>자격·교육·수료 이력</FieldLabel>
+                    <TextArea value={certifications} onChange={setCertifications} placeholder="생활스포츠지도사, 건강운동관리사, 재활운동 교육 등 쉼표로 구분" />
+                  </div>
+                  <div className="grid gap-5 sm:grid-cols-2">
                     <div>
-                      <FieldLabel>경력 년수</FieldLabel>
-                      <TextInput
-                        value={careerYears}
-                        onChange={setCareerYears}
-                        placeholder="예: 8년"
-                      />
+                      <FieldLabel>포트폴리오 링크</FieldLabel>
+                      <TextInput value={portfolioUrl} onChange={setPortfolioUrl} placeholder="https://..." type="url" />
                     </div>
                     <div>
-                      <FieldLabel>주요 경력</FieldLabel>
-                      <TextArea
-                        value={careerHighlights}
-                        onChange={setCareerHighlights}
-                        placeholder="근무 센터, 지도 경험, 주요 프로젝트를 입력해주세요."
-                      />
+                      <FieldLabel>인스타그램 또는 웹사이트 링크</FieldLabel>
+                      <TextInput value={snsUrl} onChange={setSnsUrl} placeholder="https://..." type="url" />
                     </div>
-                    <div>
-                      <FieldLabel>자격증/수료/교육 이력</FieldLabel>
-                      <TextArea
-                        value={certifications}
-                        onChange={setCertifications}
-                        placeholder="생활스포츠지도사, 재활운동 교육, 필라테스 지도자 과정 등 쉼표로 구분해 입력해주세요."
-                        rows={4}
-                      />
+                  </div>
+                  <div>
+                    <FieldLabel>영상 URL</FieldLabel>
+                    <TextInput value={videoUrl} onChange={setVideoUrl} placeholder="인터뷰/소개 영상 URL" type="url" />
+                  </div>
+                </div>
+              ) : null}
+
+              {currentStep === 3 ? (
+                <div className="mt-6 grid gap-6">
+                  <section className="rounded-[8px] border border-[#E5E7EB] bg-white p-5">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <FieldLabel>프로필 사진</FieldLabel>
+                      <span className="text-xs font-bold text-[#374151]">사진이 없어도 제출 가능합니다.</span>
                     </div>
-                    <label className="flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-[8px] border border-dashed border-[#D9CFBF] bg-white px-4 py-6 text-center transition hover:border-[#111111]">
-                      <span className="text-sm font-black text-[#111111]">
-                        자격/증빙 파일 업로드
-                      </span>
-                      <span className="mt-2 text-xs font-bold text-[#374151]">
-                        {certificationFile
-                          ? certificationFile.name
-                          : "PDF, JPG, PNG 파일을 선택해주세요"}
-                      </span>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+                      <input
+                        value={imageInput}
+                        onChange={(event) => setImageInput(event.target.value)}
+                        placeholder="사진 URL을 붙여넣으세요"
+                        className="min-h-12 rounded-[8px] border border-[#D9CFBF] bg-[#FBFAF7] px-4 text-sm font-bold outline-none"
+                      />
+                      <button type="button" onClick={() => addProfileImage()} className="rounded-full bg-[#111111] px-5 py-3 text-sm font-black text-white">
+                        + 사진 추가
+                      </button>
+                    </div>
+                    <label className="mt-3 flex min-h-24 cursor-pointer items-center justify-center rounded-[8px] border border-dashed border-[#D9CFBF] bg-[#FBFAF7] px-4 py-5 text-center text-sm font-black text-[#111111]">
+                      파일 업로드 시도
                       <input
                         type="file"
-                        accept="image/*,.pdf"
+                        accept="image/*"
                         className="sr-only"
                         onChange={(event) => {
-                          if (event.target.files) {
-                            setCertificationFile(event.target.files[0]);
-                          }
+                          const file = event.target.files?.[0];
+                          if (file) void uploadProfileImage(file);
                         }}
                       />
                     </label>
-                  </div>
-                ) : null}
+                    <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                      {profileImages.map((url) => (
+                        <div key={url} className="rounded-[8px] border border-[#E5E7EB] bg-[#FBFAF7] p-3">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={url} alt="프로필 사진" className="aspect-square w-full rounded-[8px] object-cover" />
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <button type="button" onClick={() => setMainProfileImage(url)} className={`rounded-full px-3 py-2 text-xs font-black ${mainProfileImage === url ? "bg-[#0F5132] text-white" : "bg-white text-[#111111]"}`}>
+                              대표 사진
+                            </button>
+                            <button type="button" onClick={() => removeProfileImage(url)} className="rounded-full bg-[#FEE2E2] px-3 py-2 text-xs font-black text-[#991B1B]">
+                              삭제
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
 
-                {currentStep === 3 ? (
-                  <div className="mt-6 grid gap-5">
-                    <div>
-                      <FieldLabel>한 줄 소개</FieldLabel>
-                      <TextInput
-                        value={oneLineIntro}
-                        onChange={setOneLineIntro}
-                        placeholder="예: 통증 없이 움직이는 몸을 만드는 재활운동 코치"
-                      />
-                    </div>
-                    <div>
-                      <FieldLabel>전문가 철학</FieldLabel>
-                      <TextArea
-                        value={philosophy}
-                        onChange={setPhilosophy}
-                        placeholder="고객에게 전하고 싶은 가치와 일하는 방식을 적어주세요."
-                        rows={4}
-                      />
-                    </div>
-                    <div>
-                      <FieldLabel>대표 사례 제목</FieldLabel>
-                      <TextInput
-                        value={caseTitle}
-                        onChange={setCaseTitle}
-                        placeholder="예: 8주 허리 통증 개선 케이스"
-                      />
-                    </div>
-                    <div>
-                      <FieldLabel>고객의 문제</FieldLabel>
-                      <TextArea
-                        value={caseProblem}
-                        onChange={setCaseProblem}
-                        placeholder="고객이 어떤 문제를 갖고 있었나요?"
-                        rows={3}
-                      />
-                    </div>
-                    <div>
-                      <FieldLabel>진행 과정</FieldLabel>
-                      <TextArea
-                        value={caseProcess}
-                        onChange={setCaseProcess}
-                        placeholder="어떤 방식으로 해결 과정을 설계했나요?"
-                        rows={3}
-                      />
-                    </div>
-                    <div className="grid gap-5 sm:grid-cols-2">
+                  <div>
+                    <FieldLabel>지도 철학과 상담 방식</FieldLabel>
+                    <TextArea value={philosophy} onChange={setPhilosophy} placeholder="고객을 어떻게 돕는지, 어떤 방식으로 상담/수업하는지 적어주세요." />
+                  </div>
+                  <div>
+                    <FieldLabel>기타 소개 내용</FieldLabel>
+                    <TextArea value={extraIntro} onChange={setExtraIntro} placeholder="고객에게 더 알려주고 싶은 내용을 자유롭게 작성해주세요." />
+                  </div>
+
+                  <section className="rounded-[8px] border border-[#E5E7EB] bg-white p-5">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
-                        <FieldLabel>결과</FieldLabel>
-                        <TextArea
-                          value={caseResult}
-                          onChange={setCaseResult}
-                          placeholder="어떤 변화나 결과가 있었나요?"
-                          rows={3}
-                        />
+                        <p className="text-sm font-black text-[#111111]">고객 변화 사례</p>
+                        <p className="mt-1 text-xs font-bold text-[#374151]">사례가 없어도 제출 가능합니다.</p>
                       </div>
+                      <button type="button" onClick={() => setCases((current) => [...current, emptyCase()])} className="rounded-full bg-[#0F5132] px-5 py-3 text-sm font-black text-white">
+                        + 사례 추가
+                      </button>
                     </div>
-                  </div>
-                ) : null}
-
-                {currentStep === 4 ? (
-                  <div className="mt-6 grid gap-5">
-                    <article className="overflow-hidden rounded-[8px] border border-[#E5E7EB] bg-white shadow-[0_18px_55px_rgba(24,24,20,0.08)]">
-                      <div className="bg-[#111111] p-5 text-white sm:p-6">
-                        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                          <div>
-                            <p className="text-xs font-black uppercase tracking-[0.18em] text-[#B7E3C9]">
-                              Profile Card Preview
-                            </p>
-                            <h3 className="mt-3 text-3xl font-black">
-                              {name || "전문가 이름"}
-                            </h3>
-                            <p className="mt-2 text-sm font-bold leading-6 text-white/80">
-                              {specialty || "세부 분야"} · {location || "활동 지역"}
-                            </p>
+                    <div className="mt-4 grid gap-4">
+                      {cases.map((item, index) => (
+                        <article key={item.id} className="rounded-[8px] border border-[#E5E7EB] bg-[#FBFAF7] p-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <h3 className="text-lg font-black">사례 {index + 1}</h3>
+                            <button type="button" onClick={() => setCases((current) => current.filter((caseItem) => caseItem.id !== item.id))} className="rounded-full bg-white px-3 py-2 text-xs font-black text-[#991B1B]">
+                              삭제
+                            </button>
                           </div>
-                          <span className="w-fit rounded-full bg-white px-4 py-2 text-xs font-black text-[#0F5132]">
-                            승인 대기
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="grid gap-px bg-[#E5E7EB] md:grid-cols-2">
-                        {[
-                          ["연락처", phone],
-                          ["상담 방식", consultationMethods.join(", ")],
-                          ["경력", `${careerYears} · ${careerHighlights}`],
-                          ["한 줄 소개", oneLineIntro],
-                          ["전문가 철학", philosophy],
-                          ["대표 사례", `${caseTitle} - ${caseResult}`],
-                          [
-                            "자격/증빙 정보",
-                            certifications || certificationFile?.name || "",
-                          ],
-                        ].map(([label, value]) => (
-                          <div key={label} className="bg-white p-5">
-                            <p className="text-xs font-black uppercase tracking-[0.14em] text-[#0F5132]">
-                              {label}
-                            </p>
-                            <p className="mt-2 text-sm font-bold leading-6 text-[#374151]">
-                              {value || "입력 대기"}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    </article>
-
-                    <section className="grid gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">
-                      <div className="rounded-[8px] border border-[#E5E7EB] bg-white p-5">
-                        <p className="text-sm font-black uppercase tracking-[0.16em] text-[#0F5132]">
-                          Profile Completeness
-                        </p>
-                        <p className="mt-4 text-6xl font-black tracking-[-0.05em] text-[#111111]">
-                          {completenessScore}
-                          <span className="text-2xl">점</span>
-                        </p>
-                        <div className="mt-5 h-3 overflow-hidden rounded-full bg-[#E5E7EB]">
-                          <div
-                            className="h-full rounded-full bg-[#0F5132]"
-                            style={{ width: `${completenessScore}%` }}
-                          />
-                        </div>
-                        <div className="mt-5 grid gap-2">
-                          {completionItems.map((item) => (
-                            <div
-                              key={item.label}
-                              className="flex items-center justify-between rounded-[8px] bg-[#FBFAF7] p-3"
-                            >
-                              <span className="text-xs font-black text-[#111111]">
-                                {item.label}
-                              </span>
-                              <span className="text-xs font-black text-[#0F5132]">
-                                {item.complete ? "완료" : "대기"}
-                              </span>
+                          <div className="mt-4 grid gap-4">
+                            <TextInput value={item.title} onChange={(value) => updateCase(item.id, "title", value)} placeholder="사례 제목" />
+                            <TextArea value={item.problem} onChange={(value) => updateCase(item.id, "problem", value)} placeholder="고객이 처음 겪고 있던 문제" rows={3} />
+                            <TextArea value={item.process} onChange={(value) => updateCase(item.id, "process", value)} placeholder="어떤 방식으로 도움을 주었나요?" rows={3} />
+                            <TextArea value={item.result} onChange={(value) => updateCase(item.id, "result", value)} placeholder="어떤 변화가 있었나요?" rows={3} />
+                            <div className="grid gap-4 sm:grid-cols-2">
+                              <TextInput value={item.duration} onChange={(value) => updateCase(item.id, "duration", value)} placeholder="기간 예: 8주" />
+                              <TextInput value={item.imageUrl} onChange={(value) => updateCase(item.id, "imageUrl", value)} placeholder="사례 사진 URL" />
+                              <TextInput value={item.beforeImageUrl} onChange={(value) => updateCase(item.id, "beforeImageUrl", value)} placeholder="Before 사진 URL" />
+                              <TextInput value={item.afterImageUrl} onChange={(value) => updateCase(item.id, "afterImageUrl", value)} placeholder="After 사진 URL" />
                             </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="rounded-[8px] border border-[#E5E7EB] bg-white p-5">
-                        <p className="text-sm font-black uppercase tracking-[0.16em] text-[#0F5132]">
-                          부족한 항목 안내
-                        </p>
-                        <div className="mt-4 grid gap-3">
-                          {improvementTips.length > 0 ? (
-                            improvementTips.map((tip) => (
-                              <p
-                                key={tip}
-                                className="rounded-[8px] bg-[#FFF7ED] p-4 text-sm font-bold leading-6 text-[#9A3412]"
-                              >
-                                {tip}
-                              </p>
-                            ))
-                          ) : (
-                            <p className="rounded-[8px] bg-[#E8F2EC] p-4 text-sm font-bold leading-6 text-[#0F5132]">
-                              모든 핵심 항목이 입력되었습니다. 제출 전 내용을 한 번만 더 확인해주세요.
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </section>
-
-                    <section className="rounded-[8px] border border-[#E5E7EB] bg-white p-5">
-                      <p className="text-sm font-black uppercase tracking-[0.16em] text-[#0F5132]">
-                        TRUPICK Verification Preview
-                      </p>
-                      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                        {verificationPreviewItems.map((item, index) => (
-                          <div
-                            key={item}
-                            className="rounded-[8px] border border-[#E5E7EB] bg-[#FBFAF7] p-4"
-                          >
-                            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#111111] text-xs font-black text-white">
-                              {index + 1}
-                            </span>
-                            <p className="mt-3 text-sm font-black leading-6 text-[#111111]">
-                              {item}
-                            </p>
                           </div>
-                        ))}
-                      </div>
-                    </section>
-
-                    <div className="rounded-[8px] border border-[#E5E7EB] bg-white p-5">
-                      <h3 className="text-2xl font-black text-[#111111]">
-                        제출하면 승인 대기 상태로 저장됩니다.
-                      </h3>
-                      <p className="mt-3 text-sm font-bold leading-6 text-[#374151]">
-                        `approved=false`, `approval_status=pending`으로 저장되고,
-                        TRUPICK 팀 검토 후 승인 여부가 안내됩니다.
-                      </p>
+                        </article>
+                      ))}
                     </div>
+                  </section>
+                </div>
+              ) : null}
 
-                    <button
-                      type="submit"
-                      className="rounded-full bg-[#0F5132] px-6 py-4 text-sm font-black text-white shadow-[0_14px_34px_rgba(15,81,50,0.18)] transition hover:-translate-y-0.5 hover:bg-[#146C43]"
-                    >
-                      검증 신청 제출
-                    </button>
-                  </div>
-                ) : null}
-              </div>
+              {currentStep === 4 ? (
+                <div className="mt-6 grid gap-5">
+                  <section className="rounded-[8px] border border-[#E5E7EB] bg-white p-5">
+                    <p className="text-sm font-black uppercase tracking-[0.16em] text-[#0F5132]">
+                      Profile Preview
+                    </p>
+                    <h3 className="mt-3 text-3xl font-black">{name || "전문가 이름"}</h3>
+                    <p className="mt-2 text-sm font-bold leading-6 text-[#374151]">
+                      {introLine || "고객에게 보여줄 한 문장"} · {activityArea || "주요 활동 지역"}
+                    </p>
+                    <dl className="mt-5 grid gap-3 text-sm font-bold text-[#374151] sm:grid-cols-2">
+                      {[
+                        ["전문 분야", specialty],
+                        ["상담 방식", consultationMethods.join(", ")],
+                        ["상담비", consultationFee],
+                        ["활동 장소", [centerName, detailedLocation].filter(Boolean).join(" · ")],
+                        ["경력", [careerYears, careerSummary].filter(Boolean).join(" · ")],
+                        ["자격/교육", certifications],
+                        ["사례 수", `${cases.length}개`],
+                        ["대표 사진", mainProfileImage ? "선택 완료" : "미선택"],
+                      ].map(([label, value]) => (
+                        <div key={label} className="rounded-[8px] bg-[#FBFAF7] p-4">
+                          <dt className="font-black text-[#111111]">{label}</dt>
+                          <dd className="mt-1">{value || "선택 입력 없음"}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </section>
 
-              <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
-                <button
-                  type="button"
-                  onClick={goBack}
-                  disabled={currentStep === 1}
-                  className="rounded-full border border-[#D9CFBF] bg-white px-6 py-3 text-sm font-black text-[#111111] transition hover:border-[#111111] disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  이전
+                  <section className="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)]">
+                    <div className="rounded-[8px] border border-[#E5E7EB] bg-white p-5">
+                      <p className="text-sm font-black uppercase tracking-[0.14em] text-[#0F5132]">
+                        Profile Completeness
+                      </p>
+                      <p className="mt-4 text-6xl font-black tracking-[-0.05em]">
+                        {completion.score}%
+                      </p>
+                      <div className="mt-5 h-3 overflow-hidden rounded-full bg-[#E5E7EB]">
+                        <div className="h-full rounded-full bg-[#0F5132]" style={{ width: `${completion.score}%` }} />
+                      </div>
+                    </div>
+                    <div className="rounded-[8px] border border-[#E5E7EB] bg-white p-5">
+                      <p className="text-sm font-black uppercase tracking-[0.14em] text-[#0F5132]">
+                        보완하면 좋은 항목
+                      </p>
+                      <div className="mt-4 grid gap-2">
+                        {completion.missing.length > 0 ? (
+                          completion.missing.map((tip) => (
+                            <p key={tip} className="rounded-[8px] bg-[#FFF7ED] p-3 text-sm font-bold text-[#9A3412]">
+                              {tip}
+                            </p>
+                          ))
+                        ) : (
+                          <p className="rounded-[8px] bg-[#E8F2EC] p-3 text-sm font-bold text-[#0F5132]">
+                            핵심 정보가 충분히 입력되었습니다.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </section>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <button type="button" onClick={() => setCurrentStep((step) => Math.max(1, step - 1))} disabled={currentStep === 1} className="rounded-full border border-[#D9CFBF] bg-white px-6 py-3 text-sm font-black text-[#111111] disabled:opacity-50">
+                이전
+              </button>
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <button type="button" onClick={() => void saveExpertApplication("draft")} disabled={savingMode !== null} className="rounded-full border border-[#0F5132] bg-white px-6 py-3 text-sm font-black text-[#0F5132] disabled:opacity-60">
+                  {savingMode === "draft" ? "저장 중..." : "임시 저장"}
                 </button>
                 {currentStep < wizardSteps.length ? (
-                  <button
-                    type="button"
-                    onClick={goNext}
-                    className="rounded-full bg-[#111111] px-6 py-3 text-sm font-black text-white transition hover:bg-[#0F5132]"
-                  >
+                  <button type="button" onClick={() => setCurrentStep((step) => Math.min(wizardSteps.length, step + 1))} className="rounded-full bg-[#111111] px-6 py-3 text-sm font-black text-white">
                     다음
                   </button>
-                ) : null}
+                ) : (
+                  <button type="button" onClick={() => void saveExpertApplication("pending")} disabled={savingMode !== null} className="rounded-full bg-[#0F5132] px-6 py-3 text-sm font-black text-white disabled:opacity-60">
+                    {savingMode === "pending" ? "제출 중..." : "검증 신청 제출"}
+                  </button>
+                )}
               </div>
-            </form>
+            </div>
           </div>
 
           <aside className="rounded-[8px] border border-[#E5E7EB] bg-white p-6 shadow-[0_24px_80px_rgba(24,24,20,0.08)] lg:sticky lg:top-6">
             <p className="text-sm font-black uppercase tracking-[0.18em] text-[#0F5132]">
-              Wizard Status
+              Completion Guide
             </p>
-            <h2 className="mt-3 text-3xl font-black text-[#111111]">
-              {completenessScore}% Complete
-            </h2>
+            <h2 className="mt-3 text-4xl font-black">{completion.score}%</h2>
             <div className="mt-5 h-3 overflow-hidden rounded-full bg-[#E5E7EB]">
-              <div
-                className="h-full rounded-full bg-[#0F5132] transition-all"
-                style={{ width: `${completenessScore}%` }}
-              />
+              <div className="h-full rounded-full bg-[#0F5132]" style={{ width: `${completion.score}%` }} />
             </div>
-
-            <div className="mt-5 grid gap-2">
-              {completionItems.map((item) => (
-                <div
-                  key={item.label}
-                  className="flex items-center justify-between gap-3 rounded-[8px] bg-[#FBFAF7] p-3"
-                >
-                  <span className="text-sm font-black text-[#111111]">
-                    {item.label}
-                  </span>
-                  <span
-                    className={`rounded-full px-3 py-1 text-xs font-black ${
-                      item.complete
-                        ? "bg-[#E8F2EC] text-[#0F5132]"
-                        : "bg-[#F3F4F6] text-[#374151]"
-                    }`}
-                  >
-                    {item.complete ? "저장됨" : "대기"}
-                  </span>
+            <div className="mt-6 grid gap-3">
+              {[
+                ["기본 정보", "30%"],
+                ["전문 분야", "20%"],
+                ["사진", "15%"],
+                ["경력/자격", "15%"],
+                ["대표 사례", "20%"],
+              ].map(([label, value]) => (
+                <div key={label} className="flex items-center justify-between rounded-[8px] bg-[#FBFAF7] p-3 text-sm font-black">
+                  <span>{label}</span>
+                  <span className="text-[#0F5132]">{value}</span>
                 </div>
               ))}
             </div>
-
-            <section className="mt-5 rounded-[8px] bg-[#FBFAF7] p-4">
-              <h3 className="text-base font-black text-[#111111]">
-                검증 안내
-              </h3>
-              <ul className="mt-3 grid gap-2 text-sm font-bold leading-6 text-[#374151]">
-                {verificationSteps.map((item) => (
-                  <li key={item}>- {item}</li>
-                ))}
-              </ul>
-            </section>
+            <p className="mt-6 text-sm font-bold leading-7 text-[#374151]">
+              100%가 아니어도 제출할 수 있습니다. TRUPICK 팀이 인터뷰, 영상 촬영, 검증 자료를 이후에 함께 보완합니다.
+            </p>
           </aside>
         </section>
       </div>

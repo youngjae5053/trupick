@@ -58,8 +58,9 @@ export default function AdminFeedbackPage() {
       const supabase = getSupabaseBrowserClient();
 
       if (!supabase) {
+        console.error("Supabase browser client is not available on /admin/feedback.");
         if (isMounted) {
-          setErrorMessage("서비스 연결 설정을 확인하는 중입니다.");
+          setErrorMessage("피드백 목록을 불러올 수 없습니다. Supabase 환경변수를 확인해주세요.");
         }
         return;
       }
@@ -77,6 +78,7 @@ export default function AdminFeedbackPage() {
       }
 
       if (error) {
+        console.error("Failed to load feedback rows", error);
         setErrorMessage(getFriendlyErrorMessage(error.message));
         return;
       }

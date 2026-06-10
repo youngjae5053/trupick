@@ -1,10 +1,16 @@
 export type ProfileCompletenessInput = {
   image_url?: string | null;
+  main_profile_image?: string | null;
+  profile_images?: string[] | null;
   photoUrl?: string | null;
   description?: string | null;
+  intro_line?: string | null;
   career?: string | null;
+  career_summary?: string | null;
+  career_years?: string | null;
   certifications?: string[] | string | null;
   location?: string | null;
+  activity_area?: string | null;
   consultation_methods?: string[] | string | null;
   sns_url?: string | null;
   portfolio_url?: string | null;
@@ -53,19 +59,26 @@ export function getProfileCompleteness(
     {
       key: "photo",
       label: "프로필 사진",
-      complete: hasText(input.image_url) || hasText(input.photoUrl),
+      complete:
+        hasText(input.image_url) ||
+        hasText(input.main_profile_image) ||
+        hasListValue(input.profile_images) ||
+        hasText(input.photoUrl),
       suggestion: "프로필 사진을 추가하면 첫인상이 좋아집니다.",
     },
     {
       key: "description",
       label: "소개글",
-      complete: hasText(input.description),
+      complete: hasText(input.description) || hasText(input.intro_line),
       suggestion: "소개글을 보강하면 상담 전 신뢰도가 높아집니다.",
     },
     {
       key: "career",
       label: "경력",
-      complete: hasText(input.career),
+      complete:
+        hasText(input.career) ||
+        hasText(input.career_summary) ||
+        hasText(input.career_years),
       suggestion: "주요 경력을 추가하면 전문성이 더 잘 드러납니다.",
     },
     {
@@ -77,7 +90,7 @@ export function getProfileCompleteness(
     {
       key: "location",
       label: "활동 지역",
-      complete: hasText(input.location),
+      complete: hasText(input.location) || hasText(input.activity_area),
       suggestion: "활동 지역을 입력하면 가까운 고객에게 더 잘 노출됩니다.",
     },
     {

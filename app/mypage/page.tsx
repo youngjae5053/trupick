@@ -39,6 +39,7 @@ type ExpertProfile = ProfileCompletenessInput & {
   approved: boolean | null;
   status?: string | null;
   approval_status?: string | null;
+  profile_completion_score?: number | null;
 };
 
 type ReviewRecord = {
@@ -194,6 +195,17 @@ function getExpertApprovalStatus(expert: ExpertProfile | null) {
     return "pending";
   }
 
+  if (expert.approval_status === "draft" || expert.status === "draft") {
+    return "draft";
+  }
+
+  if (
+    expert.approval_status === "pending_review" ||
+    expert.status === "pending_review"
+  ) {
+    return "pending_review";
+  }
+
   if (expert.approval_status === "rejected" || expert.status === "rejected") {
     return "rejected";
   }
@@ -210,6 +222,14 @@ function getExpertApprovalStatus(expert: ExpertProfile | null) {
 }
 
 function getExpertStatusLabel(status: string) {
+  if (status === "draft") {
+    return "임시 저장";
+  }
+
+  if (status === "pending_review") {
+    return "재검토 대기";
+  }
+
   if (status === "approved") {
     return "승인 완료";
   }
@@ -222,6 +242,14 @@ function getExpertStatusLabel(status: string) {
 }
 
 function getExpertStatusClassName(status: string) {
+  if (status === "draft") {
+    return "bg-[#F3F4F6] text-[#374151]";
+  }
+
+  if (status === "pending_review") {
+    return "bg-[#EEF2FF] text-[#3730A3]";
+  }
+
   if (status === "approved") {
     return "bg-[#E8F2EC] text-[#0F5132]";
   }
@@ -441,6 +469,10 @@ export default function MyPage() {
     () => getProfileCompleteness(expertProfile || {}),
     [expertProfile]
   );
+  const expertCompletenessScore =
+    typeof expertProfile?.profile_completion_score === "number"
+      ? expertProfile.profile_completion_score
+      : completeness.score;
   const role = profile?.role ?? "customer";
   const completedRequests = requests.filter(
     (request) => normalizeRequestStatus(request.status) === "completed"
@@ -512,7 +544,7 @@ export default function MyPage() {
           <ExpertPanel
             expertProfile={expertProfile}
             requests={requests}
-            completenessScore={completeness.score}
+            completenessScore={expertCompletenessScore}
           />
         ) : null}
 

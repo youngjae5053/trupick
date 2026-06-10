@@ -38,6 +38,43 @@ type Expert = {
   certifications?: string[] | string | null;
   portfolio_url?: string | null;
   sns_url?: string | null;
+  consultation_methods?: string[] | null;
+  consultation_fee?: string | null;
+  phone?: string | null;
+  activity_area?: string | null;
+  specialties?: string[] | null;
+  career_years?: string | null;
+  career_summary?: string | null;
+  profile_images?: string[] | null;
+  main_profile_image?: string | null;
+  intro_line?: string | null;
+  philosophy?: string | null;
+  cases?: Array<{
+    id?: string;
+    title?: string;
+    problem?: string;
+    process?: string;
+    result?: string;
+    duration?: string;
+    imageUrl?: string;
+    beforeImageUrl?: string;
+    afterImageUrl?: string;
+  }> | null;
+  profile_completion_score?: number | null;
+  detailed_location?: string | null;
+  center_name?: string | null;
+  map_address?: string | null;
+  video_url?: string | null;
+  extra_intro?: string | null;
+  admin_interview_done?: boolean | null;
+  admin_interview_memo?: string | null;
+  admin_site_visit_done?: boolean | null;
+  admin_video_shoot_done?: boolean | null;
+  admin_video_url?: string | null;
+  admin_featured_image?: string | null;
+  admin_verification_comment?: string | null;
+  admin_internal_score?: number | null;
+  admin_approval_memo?: string | null;
 };
 
 const filters: Array<{ label: string; value: ApprovalFilter }> = [
@@ -83,9 +120,6 @@ const structuredDescriptionLabels = [
   "대표 사례",
 ];
 
-const fallbackImage =
-  "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=600&q=80";
-
 function getExpertStatus(expert: Expert): ApprovalStatus {
   if (
     expert.approval_status === "rejected" ||
@@ -102,6 +136,10 @@ function getExpertStatus(expert: Expert): ApprovalStatus {
   }
 
   return "pending";
+}
+
+function isDraftExpert(expert: Expert) {
+  return expert.approval_status === "draft" || expert.status === "draft";
 }
 
 function getStatusLabel(status: ApprovalStatus) {
@@ -186,16 +224,36 @@ function getLineValue(source: string | null | undefined, label: string) {
 }
 
 function getWizardSummary(expert: Expert) {
-  const phone = getSectionValue(expert.description, "연락처");
-  const consultationMethods = getSectionValue(expert.description, "상담 방식");
-  const oneLineIntro = getSectionValue(expert.description, "한 줄 소개");
-  const philosophy = getSectionValue(expert.description, "전문가 철학");
+  const phone = expert.phone || getSectionValue(expert.description, "연락처");
+  const consultationMethods =
+    expert.consultation_methods?.join(", ") ||
+    getSectionValue(expert.description, "상담 방식");
+  const oneLineIntro =
+    expert.intro_line || getSectionValue(expert.description, "한 줄 소개");
+  const philosophy =
+    expert.philosophy || getSectionValue(expert.description, "전문가 철학");
   const teachingMethod = getSectionValue(expert.description, "수업/상담 방식");
   const promise = getSectionValue(expert.description, "고객에게 약속하는 것");
   const faq = getSectionValue(expert.description, "자주 받는 질문");
-  const casePortfolio = getSectionValue(expert.description, "대표 사례");
-  const careerYears = getLineValue(expert.career, "경력 년수");
-  const careerHighlights = getLineValue(expert.career, "주요 경력");
+  const casePortfolio =
+    expert.cases && expert.cases.length > 0
+      ? expert.cases
+          .map((item, index) =>
+            [
+              `${index + 1}. ${item.title || "제목 미입력"}`,
+              item.problem ? `문제: ${item.problem}` : "",
+              item.process ? `과정: ${item.process}` : "",
+              item.result ? `변화: ${item.result}` : "",
+              item.duration ? `기간: ${item.duration}` : "",
+            ]
+              .filter(Boolean)
+              .join("\n")
+          )
+          .join("\n\n")
+      : getSectionValue(expert.description, "대표 사례");
+  const careerYears = expert.career_years || getLineValue(expert.career, "경력 년수");
+  const careerHighlights =
+    expert.career_summary || getLineValue(expert.career, "주요 경력");
   const confidentArea = getLineValue(expert.career, "가장 자신 있는 분야");
   const customerType = getLineValue(expert.career, "잘 맞는 고객 유형");
 
@@ -216,29 +274,33 @@ function getWizardSummary(expert: Expert) {
 }
 
 function getProfileCompletenessScore(expert: Expert) {
+  if (typeof expert.profile_completion_score === "number") {
+    return expert.profile_completion_score;
+  }
+
   const summary = getWizardSummary(expert);
   const certifications = getCertifications(expert.certifications);
   const checks = [
-    Boolean(
-      expert.name &&
-        expert.location &&
-        expert.specialty &&
-        summary.phone &&
-        summary.consultationMethods
-    ),
+    Boolean(expert.name && expert.location && expert.specialty && summary.phone),
     Boolean(
       summary.careerYears &&
         summary.careerHighlights
     ),
     Boolean(certifications.length > 0),
-    Boolean(
-      summary.oneLineIntro &&
-        summary.philosophy
-    ),
+    Boolean(summary.oneLineIntro && summary.philosophy),
     Boolean(summary.casePortfolio),
   ];
 
   return checks.filter(Boolean).length * 20;
+}
+
+function getPrimaryImage(expert: Expert) {
+  return (
+    expert.main_profile_image ||
+    expert.image_url ||
+    expert.profile_images?.[0] ||
+    ""
+  );
 }
 
 function renderLink(url: string | null | undefined, label: string) {
@@ -266,6 +328,14 @@ export default function AdminExpertsPage() {
   const [selectedExpert, setSelectedExpert] = useState<Expert | null>(null);
   const [successMessage, setSuccessMessage] = useState("");
   const [adminMemo, setAdminMemo] = useState("");
+  const [adminInterviewDone, setAdminInterviewDone] = useState(false);
+  const [adminInterviewMemo, setAdminInterviewMemo] = useState("");
+  const [adminSiteVisitDone, setAdminSiteVisitDone] = useState(false);
+  const [adminVideoShootDone, setAdminVideoShootDone] = useState(false);
+  const [adminVideoUrl, setAdminVideoUrl] = useState("");
+  const [adminFeaturedImage, setAdminFeaturedImage] = useState("");
+  const [adminVerificationComment, setAdminVerificationComment] = useState("");
+  const [adminInternalScore, setAdminInternalScore] = useState("");
   const [checklistState, setChecklistState] = useState<
     Record<VerificationCheckKey, boolean>
   >({
@@ -343,17 +413,21 @@ export default function AdminExpertsPage() {
   }, []);
 
   const counts = useMemo(
-    () => ({
-      all: experts.length,
-      pending: experts.filter((expert) => getExpertStatus(expert) === "pending")
+    () => {
+      const reviewableExperts = experts.filter((expert) => !isDraftExpert(expert));
+
+      return {
+        all: reviewableExperts.length,
+        pending: reviewableExperts.filter((expert) => getExpertStatus(expert) === "pending")
         .length,
-      approved: experts.filter((expert) => getExpertStatus(expert) === "approved")
+        approved: reviewableExperts.filter((expert) => getExpertStatus(expert) === "approved")
         .length,
-      rejected: experts.filter((expert) => getExpertStatus(expert) === "rejected")
+        rejected: reviewableExperts.filter((expert) => getExpertStatus(expert) === "rejected")
         .length,
-      hold: experts.filter((expert) => getExpertStatus(expert) === "pending")
+        hold: reviewableExperts.filter((expert) => getExpertStatus(expert) === "pending")
         .length,
-    }),
+      };
+    },
     [experts]
   );
 
@@ -361,6 +435,10 @@ export default function AdminExpertsPage() {
     const keyword = search.trim().toLowerCase();
 
     return experts.filter((expert) => {
+      if (isDraftExpert(expert)) {
+        return false;
+      }
+
       const status = getExpertStatus(expert);
       const matchesFilter = activeFilter === "all" || status === activeFilter;
       const summary = getWizardSummary(expert);
@@ -501,7 +579,19 @@ export default function AdminExpertsPage() {
 
   function openReviewModal(expert: Expert) {
     setSelectedExpert(expert);
-    setAdminMemo("");
+    setAdminMemo(expert.admin_approval_memo || "");
+    setAdminInterviewDone(Boolean(expert.admin_interview_done));
+    setAdminInterviewMemo(expert.admin_interview_memo || "");
+    setAdminSiteVisitDone(Boolean(expert.admin_site_visit_done));
+    setAdminVideoShootDone(Boolean(expert.admin_video_shoot_done));
+    setAdminVideoUrl(expert.admin_video_url || "");
+    setAdminFeaturedImage(expert.admin_featured_image || "");
+    setAdminVerificationComment(expert.admin_verification_comment || "");
+    setAdminInternalScore(
+      typeof expert.admin_internal_score === "number"
+        ? String(expert.admin_internal_score)
+        : ""
+    );
     setChecklistState({
       identity: false,
       career: false,
@@ -510,7 +600,7 @@ export default function AdminExpertsPage() {
       caseReview: false,
     });
     setQualityChecklistState({
-      photo: Boolean(expert.image_url),
+      photo: Boolean(getPrimaryImage(expert)),
       specialty: Boolean(expert.specialty),
       description: Boolean(expert.description),
       careerInfo: Boolean(expert.career),
@@ -533,6 +623,46 @@ export default function AdminExpertsPage() {
       ...current,
       [key]: !current[key],
     }));
+  }
+
+  async function saveAdminVerification(expert: Expert) {
+    const supabase = getSupabaseBrowserClient();
+
+    if (!supabase) {
+      return;
+    }
+
+    setUpdatingId(expert.id);
+
+    const payload = {
+      admin_interview_done: adminInterviewDone,
+      admin_interview_memo: adminInterviewMemo.trim(),
+      admin_site_visit_done: adminSiteVisitDone,
+      admin_video_shoot_done: adminVideoShootDone,
+      admin_video_url: adminVideoUrl.trim(),
+      admin_featured_image: adminFeaturedImage.trim(),
+      admin_verification_comment: adminVerificationComment.trim(),
+      admin_internal_score: adminInternalScore.trim()
+        ? Number(adminInternalScore)
+        : null,
+      admin_approval_memo: adminMemo.trim(),
+    };
+
+    const { error } = await supabase
+      .from("experts")
+      .update(payload)
+      .eq("id", expert.id);
+
+    setUpdatingId(null);
+
+    if (error) {
+      console.error("admin verification save error", error);
+      alert(getFriendlyErrorMessage(error.message));
+      return;
+    }
+
+    setSuccessMessage(`${expert.name} 전문가 검증 자료를 저장했습니다.`);
+    await refreshExperts();
   }
 
   const selectedSummary = selectedExpert
@@ -635,14 +765,20 @@ export default function AdminExpertsPage() {
               >
                 <div className="grid gap-5 lg:grid-cols-[140px_minmax(0,1fr)_auto] lg:items-start">
                   <div className="h-36 overflow-hidden rounded-[8px] bg-[#E5E7EB] lg:h-40">
-                    <Image
-                      src={expert.image_url || fallbackImage}
-                      alt={expert.name}
-                      width={280}
-                      height={320}
-                      unoptimized
-                      className="h-full w-full object-cover"
-                    />
+                    {getPrimaryImage(expert) ? (
+                      <Image
+                        src={getPrimaryImage(expert)}
+                        alt={expert.name}
+                        width={280}
+                        height={320}
+                        unoptimized
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center bg-[#E8F2EC] text-5xl font-black text-[#0F5132]">
+                        {expert.name.slice(0, 1)}
+                      </div>
+                    )}
                   </div>
 
                   <div className="min-w-0">
@@ -694,6 +830,10 @@ export default function AdminExpertsPage() {
                       <div>
                         <dt className="font-black text-[#111111]">상담 방식</dt>
                         <dd>{summary.consultationMethods || "-"}</dd>
+                      </div>
+                      <div>
+                        <dt className="font-black text-[#111111]">상담비</dt>
+                        <dd>{expert.consultation_fee || "-"}</dd>
                       </div>
                       <div>
                         <dt className="font-black text-[#111111]">연락처</dt>
@@ -818,14 +958,20 @@ export default function AdminExpertsPage() {
             <div className="grid gap-0 lg:grid-cols-[320px_minmax(0,1fr)]">
               <aside className="border-b border-[#E5E7EB] p-5 sm:p-7 lg:border-b-0 lg:border-r">
                 <div className="overflow-hidden rounded-[8px] bg-[#E5E7EB]">
-                  <Image
-                    src={selectedExpert.image_url || fallbackImage}
-                    alt={selectedExpert.name}
-                    width={640}
-                    height={640}
-                    unoptimized
-                    className="aspect-square w-full object-cover"
-                  />
+                  {getPrimaryImage(selectedExpert) ? (
+                    <Image
+                      src={getPrimaryImage(selectedExpert)}
+                      alt={selectedExpert.name}
+                      width={640}
+                      height={640}
+                      unoptimized
+                      className="aspect-square w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex aspect-square w-full items-center justify-center bg-[#E8F2EC] text-7xl font-black text-[#0F5132]">
+                      {selectedExpert.name.slice(0, 1)}
+                    </div>
+                  )}
                 </div>
 
                 <section className="mt-5 rounded-[8px] bg-[#FBFAF7] p-4">
@@ -931,9 +1077,18 @@ export default function AdminExpertsPage() {
                       rows: [
                         ["이름", selectedExpert.name],
                         ["연락처", selectedSummary.phone || "-"],
-                        ["세부 분야", selectedExpert.specialty],
-                        ["활동 지역", selectedExpert.location],
+                        [
+                          "세부 분야",
+                          selectedExpert.specialties?.length
+                            ? selectedExpert.specialties.join(", ")
+                            : selectedExpert.specialty,
+                        ],
+                        ["활동 지역", selectedExpert.activity_area || selectedExpert.location],
+                        ["상세 위치", selectedExpert.detailed_location || "-"],
+                        ["센터/장소", selectedExpert.center_name || "-"],
+                        ["지도 주소", selectedExpert.map_address || "-"],
                         ["상담 방식", selectedSummary.consultationMethods || "-"],
+                        ["상담비", selectedExpert.consultation_fee || "-"],
                       ],
                     },
                     {
@@ -960,6 +1115,10 @@ export default function AdminExpertsPage() {
                           "SNS/웹사이트",
                           selectedExpert.sns_url ? "링크 있음" : "선택 입력 없음",
                         ],
+                        [
+                          "전문가 영상",
+                          selectedExpert.video_url ? "링크 있음" : "선택 입력 없음",
+                        ],
                       ],
                     },
                     {
@@ -967,6 +1126,7 @@ export default function AdminExpertsPage() {
                       rows: [
                         ["한 줄 소개", selectedSummary.oneLineIntro || "-"],
                         ["전문가 철학", selectedSummary.philosophy || "-"],
+                        ["기타 소개", selectedExpert.extra_intro || "-"],
                         ["대표 사례", selectedSummary.casePortfolio || "-"],
                       ],
                     },
@@ -992,6 +1152,118 @@ export default function AdminExpertsPage() {
                       </dl>
                     </section>
                   ))}
+
+                  <section className="rounded-[8px] border border-[#E5E7EB] bg-[#FBFAF7] p-4">
+                    <h3 className="text-lg font-black text-[#111111]">
+                      Profile Images
+                    </h3>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                      {(selectedExpert.profile_images || [])
+                        .filter(Boolean)
+                        .map((url) => (
+                          <div
+                            key={url}
+                            className="overflow-hidden rounded-[8px] border border-[#E5E7EB] bg-white"
+                          >
+                            <Image
+                              src={url}
+                              alt={`${selectedExpert.name} 프로필 사진`}
+                              width={320}
+                              height={240}
+                              unoptimized
+                              className="aspect-[4/3] w-full object-cover"
+                            />
+                            {url === getPrimaryImage(selectedExpert) ? (
+                              <p className="p-3 text-xs font-black text-[#0F5132]">
+                                대표 사진
+                              </p>
+                            ) : null}
+                          </div>
+                        ))}
+                      {(selectedExpert.profile_images || []).length === 0 ? (
+                        <p className="rounded-[8px] bg-white p-4 text-sm font-bold text-[#374151]">
+                          등록된 추가 사진이 없습니다.
+                        </p>
+                      ) : null}
+                    </div>
+                  </section>
+
+                  <section className="rounded-[8px] border border-[#E5E7EB] bg-[#FBFAF7] p-4">
+                    <h3 className="text-lg font-black text-[#111111]">
+                      관리자 검증 자료
+                    </h3>
+                    <div className="mt-4 grid gap-4">
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        {[
+                          ["인터뷰 진행", adminInterviewDone, setAdminInterviewDone],
+                          ["현장 방문", adminSiteVisitDone, setAdminSiteVisitDone],
+                          ["영상 촬영", adminVideoShootDone, setAdminVideoShootDone],
+                        ].map(([label, checked, setter]) => (
+                          <label
+                            key={label as string}
+                            className="flex items-center gap-3 rounded-[8px] bg-white p-3 text-sm font-black text-[#111111]"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked as boolean}
+                              onChange={(event) =>
+                                (setter as (value: boolean) => void)(
+                                  event.target.checked
+                                )
+                              }
+                              className="h-4 w-4 accent-[#0F5132]"
+                            />
+                            {label as string}
+                          </label>
+                        ))}
+                      </div>
+                      <textarea
+                        value={adminInterviewMemo}
+                        onChange={(event) => setAdminInterviewMemo(event.target.value)}
+                        placeholder="인터뷰 메모"
+                        className="min-h-24 w-full resize-y rounded-[8px] border border-[#D9CFBF] bg-white px-4 py-3 text-sm font-bold leading-6 text-[#111111] outline-none placeholder:text-[#9CA3AF]"
+                      />
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <input
+                          value={adminVideoUrl}
+                          onChange={(event) => setAdminVideoUrl(event.target.value)}
+                          placeholder="관리자 영상 URL"
+                          className="min-h-11 rounded-[8px] border border-[#D9CFBF] bg-white px-4 text-sm font-bold text-[#111111] outline-none placeholder:text-[#9CA3AF]"
+                        />
+                        <input
+                          value={adminFeaturedImage}
+                          onChange={(event) =>
+                            setAdminFeaturedImage(event.target.value)
+                          }
+                          placeholder="대표 촬영 이미지 URL"
+                          className="min-h-11 rounded-[8px] border border-[#D9CFBF] bg-white px-4 text-sm font-bold text-[#111111] outline-none placeholder:text-[#9CA3AF]"
+                        />
+                      </div>
+                      <textarea
+                        value={adminVerificationComment}
+                        onChange={(event) =>
+                          setAdminVerificationComment(event.target.value)
+                        }
+                        placeholder="TRUPICK 검증 코멘트"
+                        className="min-h-24 w-full resize-y rounded-[8px] border border-[#D9CFBF] bg-white px-4 py-3 text-sm font-bold leading-6 text-[#111111] outline-none placeholder:text-[#9CA3AF]"
+                      />
+                      <input
+                        value={adminInternalScore}
+                        onChange={(event) => setAdminInternalScore(event.target.value)}
+                        placeholder="내부 검증 점수 예: 93"
+                        type="number"
+                        className="min-h-11 rounded-[8px] border border-[#D9CFBF] bg-white px-4 text-sm font-bold text-[#111111] outline-none placeholder:text-[#9CA3AF]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => saveAdminVerification(selectedExpert)}
+                        disabled={updatingId === selectedExpert.id}
+                        className="w-fit rounded-full bg-[#111111] px-6 py-3 text-sm font-black text-white transition hover:bg-[#0F5132] disabled:opacity-70"
+                      >
+                        관리자 검증 자료 저장
+                      </button>
+                    </div>
+                  </section>
 
                   <section className="rounded-[8px] border border-[#E5E7EB] bg-white p-5">
                     <p className="text-sm font-black uppercase tracking-[0.16em] text-[#0F5132]">

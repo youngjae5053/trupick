@@ -27,6 +27,25 @@ type Expert = {
   consultation_methods?: string[] | null;
   sns_url?: string | null;
   portfolio_url?: string | null;
+  consultation_fee?: string | null;
+  main_profile_image?: string | null;
+  profile_images?: string[] | null;
+  intro_line?: string | null;
+  philosophy?: string | null;
+  cases?: Array<{
+    title?: string;
+    problem?: string;
+    process?: string;
+    result?: string;
+    duration?: string;
+    imageUrl?: string;
+    beforeImageUrl?: string;
+    afterImageUrl?: string;
+  }> | null;
+  center_name?: string | null;
+  detailed_location?: string | null;
+  admin_verification_comment?: string | null;
+  admin_internal_score?: number | null;
 };
 
 const defaultRating = 0;
@@ -123,7 +142,12 @@ function getResponseTime() {
 }
 
 function getPhilosophy(expert: Expert) {
-  return getSectionValue(expert.description, "전문가 철학") || expert.description;
+  return (
+    expert.philosophy ||
+    expert.intro_line ||
+    getSectionValue(expert.description, "전문가 철학") ||
+    expert.description
+  );
 }
 
 function getBestFitCustomers(category: string) {
@@ -187,6 +211,15 @@ function getSectionValue(source: string | null | undefined, label: string) {
   return values.join("\n").trim();
 }
 
+function getPrimaryImage(expert: Expert) {
+  return (
+    expert.main_profile_image ||
+    expert.image_url ||
+    expert.profile_images?.[0] ||
+    ""
+  );
+}
+
 export default async function ExpertDetailPage({
   params,
 }: {
@@ -218,7 +251,7 @@ export default async function ExpertDetailPage({
     const { data, error } = await supabase
       .from("experts")
       .select(
-        "id, name, specialty, location, description, career, image_url, plan_type, approval_status, rating, review_count"
+        "id, name, specialty, location, description, career, image_url, plan_type, approval_status, rating, review_count, certifications, consultation_methods, sns_url, portfolio_url, consultation_fee, main_profile_image, profile_images, intro_line, philosophy, cases, center_name, detailed_location, admin_verification_comment, admin_internal_score"
       )
       .eq("id", numericId)
       .eq("approved", true)
@@ -286,14 +319,28 @@ export default async function ExpertDetailPage({
   const bestFitCustomers = getBestFitCustomers(category);
   const reviewsForDisplay = reviews;
   const casePortfolio = getSectionValue(expert.description, "대표 사례");
-  const representativeCases = casePortfolio
-    ? [
-        {
-          title: "대표 사례",
-          content: casePortfolio,
-        },
-      ]
-    : [];
+  const representativeCases =
+    expert.cases && expert.cases.length > 0
+      ? expert.cases.map((item) => ({
+          title: item.title || "고객 변화 사례",
+          content: [
+            item.problem ? `문제: ${item.problem}` : "",
+            item.process ? `과정: ${item.process}` : "",
+            item.result ? `변화: ${item.result}` : "",
+            item.duration ? `기간: ${item.duration}` : "",
+          ]
+            .filter(Boolean)
+            .join("\n"),
+        }))
+      : casePortfolio
+        ? [
+            {
+              title: "대표 사례",
+              content: casePortfolio,
+            },
+          ]
+        : [];
+  const heroImage = getPrimaryImage(expert);
 
   return (
     <main className="min-h-screen bg-[#F6F3EC] pb-24 text-[#0F172A]">
@@ -314,9 +361,9 @@ export default async function ExpertDetailPage({
         <section className="mt-5 overflow-hidden rounded-[8px] border border-[#E5E0D6] bg-white">
           <div className="grid lg:grid-cols-[minmax(0,1.05fr)_minmax(420px,0.95fr)]">
             <div className="relative min-h-[360px] bg-[#E5E0D6] sm:min-h-[560px]">
-              {expert.image_url ? (
+              {heroImage ? (
                 <Image
-                  src={expert.image_url}
+                  src={heroImage}
                   alt={expert.name}
                   fill
                   unoptimized
@@ -353,10 +400,10 @@ export default async function ExpertDetailPage({
                 {expert.specialty}
               </p>
               <p className="mt-2 text-base font-bold leading-7 text-[#374151]">
-                {expert.location} · {category}
+                {[expert.location, expert.detailed_location].filter(Boolean).join(" · ")} · {category}
               </p>
               <p className="mt-6 max-w-xl text-xl font-black leading-9 text-[#0F172A]">
-                “{philosophy}”
+                “{expert.intro_line || philosophy}”
               </p>
 
               <div className="mt-8 grid gap-3 sm:grid-cols-2">
@@ -503,6 +550,7 @@ export default async function ExpertDetailPage({
               <div className="mt-7 grid gap-4 md:grid-cols-2">
                 {[
                   ["상담 방식", consultationMethods.join(" / ")],
+                  ["상담비", expert.consultation_fee || "상담 후 안내"],
                   ["가능 지역", expert.location],
                   ["추천 대상", bestFitCustomers],
                   ["예상 응답 시간", responseTime],
