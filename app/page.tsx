@@ -10,9 +10,10 @@ import { getSupabaseBrowserClient } from "@/app/supabaseBrowser";
 type Expert = {
   id: number;
   name: string;
-  specialty: string;
-  location: string;
-  description: string;
+  specialty?: string | null;
+  specialties?: string[] | null;
+  location?: string | null;
+  description?: string | null;
   category?: string | null;
   plan_type?: "free" | "premium" | null;
   image_url?: string | null;
@@ -67,10 +68,16 @@ const searchTags = ["어깨 통증", "체형교정", "다이어트", "재활운�
 
 function isFitnessExpert(expert: {
   specialty?: string | null;
+  specialties?: string[] | null;
   category?: string | null;
   profession?: string | null;
 }) {
-  const text = [expert.specialty, expert.category, expert.profession]
+  const text = [
+    expert.specialty,
+    expert.specialties?.join(" "),
+    expert.category,
+    expert.profession,
+  ]
     .filter(Boolean)
     .join(" ");
 
@@ -91,11 +98,13 @@ function toLandingExperts(
   const fitnessExperts = experts.filter(isFitnessExpert);
   const source = fitnessExperts.map((expert) => {
     const stats = reviewStats[expert.id];
+    const profession =
+      expert.specialty || expert.specialties?.[0] || "운동/재활 전문가";
 
     return {
       id: expert.id,
       name: expert.name,
-      profession: expert.specialty,
+      profession,
       category: expert.category || "운동/재활",
       rating: stats?.rating ?? 0,
       reviews: stats?.reviewCount ?? 0,
@@ -504,7 +513,6 @@ export default function HomePage() {
           <nav className="flex flex-wrap gap-4 text-sm font-black text-[#111111]">
             <Link href="/experts">Experts</Link>
             <Link href="/become-expert">Become Expert</Link>
-            <Link href="/register">Register</Link>
             <Link href="/how-we-verify">Standards</Link>
             <Link href="/feedback">Feedback</Link>
           </nav>

@@ -56,9 +56,9 @@ type Expert = {
     process?: string;
     result?: string;
     duration?: string;
-    imageUrl?: string;
-    beforeImageUrl?: string;
-    afterImageUrl?: string;
+    image_url?: string;
+    before_image_url?: string;
+    after_image_url?: string;
   }> | null;
   profile_completion_score?: number | null;
   detailed_location?: string | null;

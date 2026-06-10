@@ -19,7 +19,8 @@ import ConsultationRequestFlow from "@/app/components/ConsultationRequestFlow";
 type ApprovedExpertRow = {
   id: number;
   name: string;
-  specialty: string;
+  specialty?: string | null;
+  specialties?: string[] | null;
   location?: string | null;
   description?: string | null;
   career?: string | null;
@@ -39,6 +40,13 @@ type ApprovedExpertRow = {
   career_years?: string | null;
   activity_area?: string | null;
   detailed_location?: string | null;
+  details?: {
+    detailed_location?: string | null;
+    consultation_methods?: string[] | null;
+    sns_url?: string | null;
+    portfolio_url?: string | null;
+    plan_type?: "free" | "premium" | null;
+  } | null;
 };
 
 type ReviewStats = Record<number, { rating: number; reviewCount: number }>;
@@ -463,17 +471,31 @@ function mapApprovedExperts(
 ): ExpertDiscoveryProfile[] {
   return rows.map((expert, index) => {
     const stats = reviewStats[expert.id];
+    const profession =
+      expert.specialty || expert.specialties?.[0] || "운동/재활 전문가";
+    const detailLocation = expert.detailed_location || expert.details?.detailed_location;
+    const consultationMethods =
+      expert.consultation_methods && expert.consultation_methods.length > 0
+        ? expert.consultation_methods
+        : expert.details?.consultation_methods &&
+            expert.details.consultation_methods.length > 0
+          ? expert.details.consultation_methods
+          : ["센터 방문", "온라인", "방문 상담"];
+    const planType =
+      expert.plan_type === "premium" || expert.details?.plan_type === "premium"
+        ? "premium"
+        : "free";
 
     return {
       id: expert.id,
       nickname: expert.name,
-      profession: expert.specialty,
+      profession,
       category:
         expert.category && isExpertCategory(expert.category)
           ? expert.category
-          : deriveCategory(expert.specialty),
+          : deriveCategory(profession),
       location:
-        [expert.activity_area || expert.location, expert.detailed_location]
+        [expert.activity_area || expert.location, detailLocation]
           .filter(Boolean)
           .join(" · ") || "지역 협의",
       description:
@@ -485,14 +507,11 @@ function mapApprovedExperts(
           .filter(Boolean)
           .join(" · ") || "경력 정보 검토 완료",
       certifications: normalizeStringArray(expert.certifications),
-      specialtyTags: expert.specialty_tags || [],
-      consultationMethods:
-        expert.consultation_methods && expert.consultation_methods.length > 0
-          ? expert.consultation_methods
-          : ["센터 방문", "온라인", "방문 상담"],
-      snsUrl: expert.sns_url ?? null,
-      portfolioUrl: expert.portfolio_url ?? null,
-      planType: expert.plan_type === "premium" ? "premium" : "free",
+      specialtyTags: expert.specialty_tags || expert.specialties || [],
+      consultationMethods,
+      snsUrl: expert.sns_url || expert.details?.sns_url || null,
+      portfolioUrl: expert.portfolio_url || expert.details?.portfolio_url || null,
+      planType,
       rating: stats?.rating ?? 0,
       reviewCount: stats?.reviewCount ?? 0,
       distanceMeters: 1200 + index * 600,
@@ -545,9 +564,7 @@ function ExpertsDiscoveryContent({
         const supabase = getSupabaseBrowserClient();
         const { data: approvedRows, error } = await supabase
           .from("experts")
-          .select(
-            "id, name, specialty, location, description, career, category, plan_type, image_url, certifications, specialty_tags, consultation_methods, sns_url, portfolio_url, consultation_fee, main_profile_image, profile_images, intro_line, career_summary, career_years, activity_area, detailed_location"
-          )
+          .select("*")
           .eq("approved", true)
           .eq("approval_status", "approved");
 

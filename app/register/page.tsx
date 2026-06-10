@@ -18,9 +18,9 @@ type ExpertCase = {
   process: string;
   result: string;
   duration: string;
-  imageUrl: string;
-  beforeImageUrl: string;
-  afterImageUrl: string;
+  image_url: string;
+  before_image_url: string;
+  after_image_url: string;
 };
 
 type ExistingExpert = {
@@ -50,6 +50,7 @@ type ExistingExpert = {
   longitude?: number | null;
   video_url?: string | null;
   extra_intro?: string | null;
+  details?: ExpertDetails | null;
   portfolio_url?: string | null;
   sns_url?: string | null;
   approved?: boolean | null;
@@ -57,42 +58,52 @@ type ExistingExpert = {
   status?: ExpertStatus | null;
 };
 
-type SupabaseExpertPayload = {
-  user_id: string;
-  name: string;
-  phone: string;
-  location: string;
-  activity_area: string;
+type ExpertDetails = {
+  application_status: ExpertStatus;
   detailed_location: string;
   center_name: string;
   map_address: string;
   latitude: number | null;
   longitude: number | null;
-  specialty: string;
+  philosophy: string;
+  consultation_methods: string[];
+  consultation_fee: string;
+  sns_url: string;
+  website_url: string;
+  portfolio_url: string;
+  instagram_url: string;
+  video_url: string;
+  plan_type: "free" | "premium";
+  extra_intro: string;
+  teaching_style: string;
+  target_clients: string;
+  updated_at: string;
+};
+
+type ExpertSavePayload = {
+  user_id: string;
+  name: string;
+  phone: string;
+  activity_area: string;
+  location: string;
   specialties: string[];
+  intro_line: string;
   career_years: string;
   career_summary: string;
-  career: string;
   certifications: string[];
   profile_images: string[];
   main_profile_image: string | null;
-  image_url: string | null;
-  intro_line: string;
-  philosophy: string;
-  description: string;
   cases: ExpertCase[];
-  consultation_methods: string[];
-  consultation_fee: string;
-  portfolio_url: string;
-  sns_url: string;
-  video_url: string;
-  extra_intro: string;
   profile_completion_score: number;
-  plan_type: "free";
+  updated_at: string;
   approved: boolean;
   approval_status: ExpertStatus;
-  status: ExpertStatus;
-  updated_at: string;
+  details: ExpertDetails;
+};
+
+type SavedExpertRow = {
+  id: number;
+  approval_status?: ExpertStatus | null;
 };
 
 const wizardSteps = [
@@ -110,9 +121,9 @@ const emptyCase = (): ExpertCase => ({
   process: "",
   result: "",
   duration: "",
-  imageUrl: "",
-  beforeImageUrl: "",
-  afterImageUrl: "",
+  image_url: "",
+  before_image_url: "",
+  after_image_url: "",
 });
 
 function RequiredBadge() {
@@ -205,12 +216,74 @@ function stringifyCertifications(value: ExistingExpert["certifications"]) {
   return value || "";
 }
 
+function normalizeCases(value: ExistingExpert["cases"]) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.map((item) => {
+    const legacyItem = item as ExpertCase & {
+      imageUrl?: string;
+      beforeImageUrl?: string;
+      afterImageUrl?: string;
+    };
+
+    return {
+      id: item.id || `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      title: item.title || "",
+      problem: item.problem || "",
+      process: item.process || "",
+      result: item.result || "",
+      duration: item.duration || "",
+      image_url: item.image_url || legacyItem.imageUrl || "",
+      before_image_url: item.before_image_url || legacyItem.beforeImageUrl || "",
+      after_image_url: item.after_image_url || legacyItem.afterImageUrl || "",
+    };
+  });
+}
+
 function getStatusLabel(status: ExpertStatus | null | undefined) {
   if (status === "draft") return "임시 저장";
   if (status === "approved") return "승인 완료";
   if (status === "rejected") return "거절";
   if (status === "pending_review") return "재검토 대기";
   return "검토 대기";
+}
+
+function pickExpertPayload(payload: ExpertSavePayload) {
+  return {
+    user_id: payload.user_id,
+    name: payload.name,
+    phone: payload.phone,
+    activity_area: payload.activity_area,
+    location: payload.location,
+    specialties: payload.specialties,
+    intro_line: payload.intro_line,
+    career_years: payload.career_years,
+    career_summary: payload.career_summary,
+    certifications: payload.certifications,
+    profile_images: payload.profile_images,
+    main_profile_image: payload.main_profile_image,
+    cases: payload.cases,
+    profile_completion_score: payload.profile_completion_score,
+    updated_at: payload.updated_at,
+    approved: payload.approved,
+    approval_status: payload.approval_status,
+    details: payload.details,
+  };
+}
+
+function getMissingColumnName(message?: string | null) {
+  if (!message) {
+    return null;
+  }
+
+  return (
+    message.match(/'([^']+)' column/)?.[1] ||
+    message.match(/column "([^"]+)"/)?.[1] ||
+    message.match(/Could not find the '([^']+)'/)?.[1] ||
+    null
+  );
 }
 
 export default function RegisterPage() {
@@ -222,6 +295,7 @@ export default function RegisterPage() {
   const [message, setMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [savingMode, setSavingMode] = useState<SaveMode | null>(null);
+  const [uploadingImageKey, setUploadingImageKey] = useState<string | null>(null);
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -314,20 +388,36 @@ export default function RegisterPage() {
         }
 
         if (existing && isMounted) {
+          const details = existing.details;
+
           setExpertId(existing.id);
           setCurrentStatus(existing.approval_status ?? existing.status ?? null);
           setName(existing.name ?? "");
           setPhone(existing.phone ?? "");
           setActivityArea(existing.activity_area ?? existing.location ?? "");
-          setDetailedLocation(existing.detailed_location ?? "");
-          setCenterName(existing.center_name ?? "");
-          setMapAddress(existing.map_address ?? "");
-          setLatitude(existing.latitude ? String(existing.latitude) : "");
-          setLongitude(existing.longitude ? String(existing.longitude) : "");
+          setDetailedLocation(
+            details?.detailed_location ?? existing.detailed_location ?? ""
+          );
+          setCenterName(details?.center_name ?? existing.center_name ?? "");
+          setMapAddress(details?.map_address ?? existing.map_address ?? "");
+          setLatitude(
+            details?.latitude
+              ? String(details.latitude)
+              : existing.latitude
+                ? String(existing.latitude)
+                : ""
+          );
+          setLongitude(
+            details?.longitude
+              ? String(details.longitude)
+              : existing.longitude
+                ? String(existing.longitude)
+                : ""
+          );
           setSpecialty(
             existing.specialties?.length
-              ? existing.specialties.join(", ")
-              : existing.specialty ?? ""
+                ? existing.specialties.join(", ")
+                : existing.specialty ?? ""
           );
           setCareerYears(existing.career_years ?? "");
           setCareerSummary(existing.career_summary ?? existing.career ?? "");
@@ -339,18 +429,20 @@ export default function RegisterPage() {
                 ? [existing.image_url]
                 : []
           );
-          setMainProfileImage(
-            existing.main_profile_image ?? existing.image_url ?? ""
-          );
+          setMainProfileImage(existing.main_profile_image ?? existing.image_url ?? "");
           setIntroLine(existing.intro_line ?? "");
-          setPhilosophy(existing.philosophy ?? "");
-          setCases(Array.isArray(existing.cases) ? existing.cases : []);
-          setConsultationMethods(existing.consultation_methods ?? []);
-          setConsultationFee(existing.consultation_fee ?? "");
-          setPortfolioUrl(existing.portfolio_url ?? "");
-          setSnsUrl(existing.sns_url ?? "");
-          setVideoUrl(existing.video_url ?? "");
-          setExtraIntro(existing.extra_intro ?? "");
+          setPhilosophy(details?.philosophy ?? existing.philosophy ?? "");
+          setCases(normalizeCases(existing.cases));
+          setConsultationMethods(
+            details?.consultation_methods ?? existing.consultation_methods ?? []
+          );
+          setConsultationFee(
+            details?.consultation_fee ?? existing.consultation_fee ?? ""
+          );
+          setPortfolioUrl(details?.portfolio_url ?? existing.portfolio_url ?? "");
+          setSnsUrl(details?.sns_url ?? existing.sns_url ?? "");
+          setVideoUrl(details?.video_url ?? existing.video_url ?? "");
+          setExtraIntro(details?.extra_intro ?? existing.extra_intro ?? "");
         }
 
         if (isMounted) setCheckingAuth(false);
@@ -446,34 +538,54 @@ export default function RegisterPage() {
     setImageInput("");
   }
 
-  async function uploadProfileImage(file: File) {
-    setErrorMessage("");
+  async function uploadExpertAsset(file: File, prefix: string) {
     try {
       const supabase = getSupabaseBrowserClient();
       const { data: userData } = await supabase.auth.getUser();
       const userId = userData.user?.id;
 
       if (!userId) {
-        setErrorMessage("로그인 정보를 찾을 수 없습니다. 다시 로그인해주세요.");
-        return;
+        throw new Error("로그인 정보를 찾을 수 없습니다. 다시 로그인해주세요.");
       }
 
-      const path = `${userId}/profile-${Date.now()}-${file.name}`;
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
+      const path = `${userId}/${prefix}-${Date.now()}-${safeName}`;
       const { error } = await supabase.storage
         .from("expert-assets")
         .upload(path, file, { upsert: false });
 
       if (error) {
-        console.error("profile image upload error", error);
-        setErrorMessage(`사진 업로드 실패: ${error.message}`);
-        return;
+        console.error("expert asset upload error", error);
+        throw error;
       }
 
       const { data } = supabase.storage.from("expert-assets").getPublicUrl(path);
-      addProfileImage(data.publicUrl);
+
+      return data.publicUrl;
     } catch (error) {
-      console.error("profile image upload unexpected error", error);
-      setErrorMessage("사진 업로드 중 예상치 못한 오류가 발생했습니다.");
+      console.error("expert asset upload unexpected error", error);
+      throw error;
+    }
+  }
+
+  async function uploadProfileImage(file: File) {
+    setErrorMessage("");
+    setUploadingImageKey("profile");
+
+    try {
+      const publicUrl = await uploadExpertAsset(file, "profile");
+
+      if (publicUrl) {
+        addProfileImage(publicUrl);
+      }
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? `사진 업로드 실패: ${error.message}`
+          : "사진 업로드 중 예상치 못한 오류가 발생했습니다."
+      );
+    } finally {
+      setUploadingImageKey(null);
     }
   }
 
@@ -488,6 +600,31 @@ export default function RegisterPage() {
     setCases((current) =>
       current.map((item) => (item.id === id ? { ...item, [key]: value } : item))
     );
+  }
+
+  async function uploadCaseImage(
+    caseId: string,
+    key: "image_url" | "before_image_url" | "after_image_url",
+    file: File
+  ) {
+    setErrorMessage("");
+    setUploadingImageKey(`${caseId}-${key}`);
+
+    try {
+      const publicUrl = await uploadExpertAsset(file, `case-${key}`);
+
+      if (publicUrl) {
+        updateCase(caseId, key, publicUrl);
+      }
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? `사례 사진 업로드 실패: ${error.message}`
+          : "사례 사진 업로드 중 예상치 못한 오류가 발생했습니다."
+      );
+    } finally {
+      setUploadingImageKey(null);
+    }
   }
 
   function validateSubmit(mode: SaveMode) {
@@ -506,7 +643,7 @@ export default function RegisterPage() {
     return true;
   }
 
-  async function saveExpertApplication(mode: SaveMode) {
+  async function saveExpertProfile(mode: SaveMode) {
     setMessage("");
     setErrorMessage("");
 
@@ -567,68 +704,47 @@ export default function RegisterPage() {
       ]
         .filter(Boolean)
         .join("\n\n");
-      const legacyDescription = [
-        "연락처",
-        phone.trim(),
-        "",
-        "상담 방식",
-        consultationMethods.join(", "),
-        "",
-        "상담비",
-        consultationFee.trim(),
-        "",
-        "한 줄 소개",
-        introLine.trim(),
-        "",
-        "전문가 철학",
-        philosophy.trim(),
-        "",
-        "대표 사례",
-        filteredCases
-          .map(
-            (item, index) =>
-              `${index + 1}. ${item.title}\n고객 문제: ${item.problem}\n진행 과정: ${item.process}\n결과: ${item.result}\n기간: ${item.duration}`
-          )
-          .join("\n\n"),
-      ].join("\n");
-
-      const payload: SupabaseExpertPayload = {
-        user_id: userId,
-        name: fallbackName,
-        phone: phone.trim(),
-        location: locationLabel || fallbackLocation,
-        activity_area: activityArea.trim(),
+      const details: ExpertDetails = {
+        application_status: nextStatus,
         detailed_location: detailedLocation.trim(),
         center_name: centerName.trim(),
         map_address: mapAddress.trim(),
         latitude: latitude.trim() ? Number(latitude) : null,
         longitude: longitude.trim() ? Number(longitude) : null,
-        specialty: fallbackSpecialty,
-        specialties: specialtyItems,
+        philosophy: philosophy.trim(),
+        consultation_methods: consultationMethods,
+        consultation_fee: consultationFee.trim(),
+        sns_url: snsUrl.trim(),
+        website_url: "",
+        portfolio_url: portfolioUrl.trim(),
+        instagram_url: snsUrl.trim(),
+        video_url: videoUrl.trim(),
+        plan_type: "free",
+        extra_intro: extraIntro.trim(),
+        teaching_style: philosophy.trim(),
+        target_clients: "",
+        updated_at: new Date().toISOString(),
+      };
+      const payload = pickExpertPayload({
+        user_id: userId,
+        name: fallbackName,
+        phone: phone.trim(),
+        activity_area: activityArea.trim(),
+        location: locationLabel || fallbackLocation,
+        specialties: specialtyItems.length > 0 ? specialtyItems : [fallbackSpecialty],
+        intro_line: fallbackIntro,
         career_years: careerYears.trim(),
-        career_summary: careerSummary.trim(),
-        career: legacyCareer,
+        career_summary: careerSummary.trim() || legacyCareer,
         certifications: splitList(certifications),
         profile_images: profileImages,
         main_profile_image: mainImage || null,
-        image_url: mainImage || null,
-        intro_line: fallbackIntro,
-        philosophy: philosophy.trim(),
-        description: legacyDescription,
         cases: filteredCases,
-        consultation_methods: consultationMethods,
-        consultation_fee: consultationFee.trim(),
-        portfolio_url: portfolioUrl.trim(),
-        sns_url: snsUrl.trim(),
-        video_url: videoUrl.trim(),
-        extra_intro: extraIntro.trim(),
         profile_completion_score: completion.score,
-        plan_type: "free",
+        updated_at: new Date().toISOString(),
         approved: false,
         approval_status: nextStatus,
-        status: nextStatus,
-        updated_at: new Date().toISOString(),
-      };
+        details,
+      });
 
       let targetExpertId = expertId;
 
@@ -649,23 +765,38 @@ export default function RegisterPage() {
         targetExpertId = existingByUser?.id ?? null;
       }
 
-      const { data, error } = targetExpertId
-        ? await supabase
+      async function persistExpert(savePayload: ExpertSavePayload) {
+        if (targetExpertId) {
+          return supabase
             .from("experts")
-            .update(payload)
+            .update(savePayload)
             .eq("id", targetExpertId)
             .select("id, approval_status")
-            .maybeSingle<{ id: number; approval_status: ExpertStatus }>()
-        : await supabase
-            .from("experts")
-            .insert([payload])
-            .select("id, approval_status")
-            .maybeSingle<{ id: number; approval_status: ExpertStatus }>();
+            .maybeSingle<SavedExpertRow>();
+        }
+
+        return supabase
+          .from("experts")
+          .insert([savePayload])
+          .select("id, approval_status")
+          .maybeSingle<SavedExpertRow>();
+      }
+
+      const { data, error } = await persistExpert(payload);
 
       if (error) {
-        console.error("expert application save error", error);
+        const missingColumn = getMissingColumnName(error.message);
+
+        console.error("expert application save error", {
+          error,
+          missingColumn,
+          attemptedColumns: Object.keys(payload),
+          payload,
+        });
         setErrorMessage(
-          `${getFriendlyErrorMessage(error.message)} (${error.message})`
+          missingColumn
+            ? `${missingColumn} 컬럼 문제로 저장에 실패했습니다. (${error.message})`
+            : `${getFriendlyErrorMessage(error.message)} (${error.message})`
         );
         setSavingMode(null);
         return;
@@ -929,6 +1060,11 @@ export default function RegisterPage() {
                         }}
                       />
                     </label>
+                    {uploadingImageKey === "profile" ? (
+                      <p className="mt-3 text-sm font-bold text-[#0F5132]">
+                        프로필 사진을 업로드하는 중입니다.
+                      </p>
+                    ) : null}
                     <div className="mt-4 grid gap-3 sm:grid-cols-3">
                       {profileImages.map((url) => (
                         <div key={url} className="rounded-[8px] border border-[#E5E7EB] bg-[#FBFAF7] p-3">
@@ -982,9 +1118,75 @@ export default function RegisterPage() {
                             <TextArea value={item.result} onChange={(value) => updateCase(item.id, "result", value)} placeholder="어떤 변화가 있었나요?" rows={3} />
                             <div className="grid gap-4 sm:grid-cols-2">
                               <TextInput value={item.duration} onChange={(value) => updateCase(item.id, "duration", value)} placeholder="기간 예: 8주" />
-                              <TextInput value={item.imageUrl} onChange={(value) => updateCase(item.id, "imageUrl", value)} placeholder="사례 사진 URL" />
-                              <TextInput value={item.beforeImageUrl} onChange={(value) => updateCase(item.id, "beforeImageUrl", value)} placeholder="Before 사진 URL" />
-                              <TextInput value={item.afterImageUrl} onChange={(value) => updateCase(item.id, "afterImageUrl", value)} placeholder="After 사진 URL" />
+                            </div>
+                            <div className="grid gap-3 md:grid-cols-3">
+                              {[
+                                {
+                                  label: "+ 사례 사진 추가",
+                                  field: "image_url" as const,
+                                  value: item.image_url,
+                                },
+                                {
+                                  label: "+ Before 사진 추가",
+                                  field: "before_image_url" as const,
+                                  value: item.before_image_url,
+                                },
+                                {
+                                  label: "+ After 사진 추가",
+                                  field: "after_image_url" as const,
+                                  value: item.after_image_url,
+                                },
+                              ].map((imageField) => {
+                                const uploadKey = `${item.id}-${imageField.field}`;
+
+                                return (
+                                  <div
+                                    key={imageField.field}
+                                    className="rounded-[8px] border border-[#E5E7EB] bg-white p-3"
+                                  >
+                                    {imageField.value ? (
+                                      <div>
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img
+                                          src={imageField.value}
+                                          alt={imageField.label}
+                                          className="aspect-[4/3] w-full rounded-[8px] object-cover"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            updateCase(item.id, imageField.field, "")
+                                          }
+                                          className="mt-3 rounded-full bg-[#FEE2E2] px-3 py-2 text-xs font-black text-[#991B1B]"
+                                        >
+                                          삭제
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <label className="flex min-h-32 cursor-pointer items-center justify-center rounded-[8px] border border-dashed border-[#D9CFBF] bg-[#FBFAF7] px-3 py-4 text-center text-sm font-black text-[#111111]">
+                                        {uploadingImageKey === uploadKey
+                                          ? "업로드 중..."
+                                          : imageField.label}
+                                        <input
+                                          type="file"
+                                          accept="image/*"
+                                          className="sr-only"
+                                          onChange={(event) => {
+                                            const file = event.target.files?.[0];
+                                            if (file) {
+                                              void uploadCaseImage(
+                                                item.id,
+                                                imageField.field,
+                                                file
+                                              );
+                                            }
+                                          }}
+                                        />
+                                      </label>
+                                    )}
+                                  </div>
+                                );
+                              })}
                             </div>
                           </div>
                         </article>
@@ -1063,7 +1265,7 @@ export default function RegisterPage() {
                 이전
               </button>
               <div className="flex flex-col gap-3 sm:flex-row">
-                <button type="button" onClick={() => void saveExpertApplication("draft")} disabled={savingMode !== null} className="rounded-full border border-[#0F5132] bg-white px-6 py-3 text-sm font-black text-[#0F5132] disabled:opacity-60">
+                <button type="button" onClick={() => void saveExpertProfile("draft")} disabled={savingMode !== null} className="rounded-full border border-[#0F5132] bg-white px-6 py-3 text-sm font-black text-[#0F5132] disabled:opacity-60">
                   {savingMode === "draft" ? "저장 중..." : "임시 저장"}
                 </button>
                 {currentStep < wizardSteps.length ? (
@@ -1071,7 +1273,7 @@ export default function RegisterPage() {
                     다음
                   </button>
                 ) : (
-                  <button type="button" onClick={() => void saveExpertApplication("pending")} disabled={savingMode !== null} className="rounded-full bg-[#0F5132] px-6 py-3 text-sm font-black text-white disabled:opacity-60">
+                  <button type="button" onClick={() => void saveExpertProfile("pending")} disabled={savingMode !== null} className="rounded-full bg-[#0F5132] px-6 py-3 text-sm font-black text-white disabled:opacity-60">
                     {savingMode === "pending" ? "제출 중..." : "검증 신청 제출"}
                   </button>
                 )}

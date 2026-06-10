@@ -13,9 +13,10 @@ import { PreparedAlertButton } from "@/app/components/VerifiedExpertProfileActio
 type Expert = {
   id: number;
   name: string;
-  specialty: string;
-  location: string;
-  description: string;
+  specialty?: string | null;
+  specialties?: string[] | null;
+  location?: string | null;
+  description?: string | null;
   career: string | null;
   image_url: string | null;
   plan_type: "free" | "premium" | null;
@@ -38,14 +39,24 @@ type Expert = {
     process?: string;
     result?: string;
     duration?: string;
-    imageUrl?: string;
-    beforeImageUrl?: string;
-    afterImageUrl?: string;
+    image_url?: string;
+    before_image_url?: string;
+    after_image_url?: string;
   }> | null;
   center_name?: string | null;
   detailed_location?: string | null;
   admin_verification_comment?: string | null;
   admin_internal_score?: number | null;
+  details?: {
+    detailed_location?: string | null;
+    center_name?: string | null;
+    consultation_methods?: string[] | null;
+    consultation_fee?: string | null;
+    philosophy?: string | null;
+    sns_url?: string | null;
+    portfolio_url?: string | null;
+    plan_type?: "free" | "premium" | null;
+  } | null;
 };
 
 const defaultRating = 0;
@@ -106,6 +117,10 @@ function getSpecialtyTags(expert: Expert, category: string) {
     return expert.specialty_tags;
   }
 
+  if (expert.specialties && expert.specialties.length > 0) {
+    return expert.specialties;
+  }
+
   if (category === "운동/재활") {
     return ["재활운동", "통증관리", "체형교정", "운동처방", "기능회복"];
   }
@@ -126,6 +141,13 @@ function getConsultationMethods(expert: Expert) {
     return expert.consultation_methods;
   }
 
+  if (
+    expert.details?.consultation_methods &&
+    expert.details.consultation_methods.length > 0
+  ) {
+    return expert.details.consultation_methods;
+  }
+
   return ["상담 방식 협의"];
 }
 
@@ -144,9 +166,11 @@ function getResponseTime() {
 function getPhilosophy(expert: Expert) {
   return (
     expert.philosophy ||
+    expert.details?.philosophy ||
     expert.intro_line ||
     getSectionValue(expert.description, "전문가 철학") ||
-    expert.description
+    expert.description ||
+    "고객의 현재 상태를 정확히 이해하고, 무리하지 않는 단계별 해결 방향을 제안합니다."
   );
 }
 
@@ -220,6 +244,16 @@ function getPrimaryImage(expert: Expert) {
   );
 }
 
+function getPrimarySpecialty(expert: Expert) {
+  return expert.specialty || expert.specialties?.[0] || "운동/재활 전문가";
+}
+
+function getPlanType(expert: Expert) {
+  return expert.plan_type === "premium" || expert.details?.plan_type === "premium"
+    ? "premium"
+    : "free";
+}
+
 export default async function ExpertDetailPage({
   params,
 }: {
@@ -240,19 +274,23 @@ export default async function ExpertDetailPage({
   let similarExperts: Array<{
     id: number;
     name: string;
-    specialty: string;
-    location: string;
+    specialty?: string | null;
+    specialties?: string[] | null;
+    location?: string | null;
     image_url: string | null;
     plan_type: "free" | "premium" | null;
+    main_profile_image?: string | null;
+    profile_images?: string[] | null;
+    details?: {
+      plan_type?: "free" | "premium" | null;
+    } | null;
   }> = [];
 
   if (canQuerySupabase && supabaseUrl && supabaseAnonKey) {
     const supabase = createClient(supabaseUrl, supabaseAnonKey);
     const { data, error } = await supabase
       .from("experts")
-      .select(
-        "id, name, specialty, location, description, career, image_url, plan_type, approval_status, rating, review_count, certifications, consultation_methods, sns_url, portfolio_url, consultation_fee, main_profile_image, profile_images, intro_line, philosophy, cases, center_name, detailed_location, admin_verification_comment, admin_internal_score"
-      )
+      .select("*")
       .eq("id", numericId)
       .eq("approved", true)
       .eq("approval_status", "approved")
@@ -280,11 +318,10 @@ export default async function ExpertDetailPage({
     if (expert) {
       const { data: similarRows, error: similarError } = await supabase
         .from("experts")
-        .select("id, name, specialty, location, image_url, plan_type")
+        .select("*")
         .neq("id", numericId)
         .eq("approved", true)
         .eq("approval_status", "approved")
-        .ilike("specialty", `%${expert.specialty.slice(0, 4)}%`)
         .limit(3)
         .returns<typeof similarExperts>();
 
@@ -300,7 +337,8 @@ export default async function ExpertDetailPage({
     notFound();
   }
 
-  const category = deriveCategory(expert.specialty);
+  const primarySpecialty = getPrimarySpecialty(expert);
+  const category = deriveCategory(primarySpecialty);
   const tags = getSpecialtyTags(expert, category);
   const certifications = getCertifications(expert);
   const consultationMethods = getConsultationMethods(expert);
@@ -341,6 +379,7 @@ export default async function ExpertDetailPage({
           ]
         : [];
   const heroImage = getPrimaryImage(expert);
+  const planType = getPlanType(expert);
 
   return (
     <main className="min-h-screen bg-[#F6F3EC] pb-24 text-[#0F172A]">
@@ -383,7 +422,7 @@ export default async function ExpertDetailPage({
                 <span className="rounded-full bg-[#1E4D3D] px-4 py-2 text-xs font-black text-white">
                   TRUPICK VERIFIED
                 </span>
-                {expert.plan_type === "premium" ? (
+                {planType === "premium" ? (
                   <span className="rounded-full bg-[#0F172A] px-4 py-2 text-xs font-black text-white">
                     Premium
                   </span>
@@ -397,10 +436,16 @@ export default async function ExpertDetailPage({
                 {expert.name}
               </h1>
               <p className="mt-5 text-2xl font-black text-[#0F172A]">
-                {expert.specialty}
+                {primarySpecialty}
               </p>
               <p className="mt-2 text-base font-bold leading-7 text-[#374151]">
-                {[expert.location, expert.detailed_location].filter(Boolean).join(" · ")} · {category}
+                {[
+                  expert.location,
+                  expert.detailed_location || expert.details?.detailed_location,
+                ]
+                  .filter(Boolean)
+                  .join(" · ") || "활동 지역 협의"}{" "}
+                · {category}
               </p>
               <p className="mt-6 max-w-xl text-xl font-black leading-9 text-[#0F172A]">
                 “{expert.intro_line || philosophy}”
@@ -550,8 +595,13 @@ export default async function ExpertDetailPage({
               <div className="mt-7 grid gap-4 md:grid-cols-2">
                 {[
                   ["상담 방식", consultationMethods.join(" / ")],
-                  ["상담비", expert.consultation_fee || "상담 후 안내"],
-                  ["가능 지역", expert.location],
+                  [
+                    "상담비",
+                    expert.consultation_fee ||
+                      expert.details?.consultation_fee ||
+                      "상담 후 안내",
+                  ],
+                  ["가능 지역", expert.location || "지역 협의"],
                   ["추천 대상", bestFitCustomers],
                   ["예상 응답 시간", responseTime],
                 ].map(([label, value]) => (
@@ -664,7 +714,8 @@ export default async function ExpertDetailPage({
                     </div>
                     <div className="p-4">
                       <div className="flex flex-wrap gap-2">
-                        {similar.plan_type === "premium" ? (
+                        {similar.plan_type === "premium" ||
+                        similar.details?.plan_type === "premium" ? (
                           <span className="rounded-full bg-[#0F172A] px-3 py-1 text-xs font-black text-white">
                             Premium
                           </span>
@@ -677,7 +728,9 @@ export default async function ExpertDetailPage({
                         {similar.name}
                       </h3>
                       <p className="mt-1 text-sm font-bold text-[#374151]">
-                        {similar.specialty}
+                        {similar.specialty ||
+                          similar.specialties?.[0] ||
+                          "운동/재활 전문가"}
                       </p>
                       <p className="mt-2 text-sm font-black text-[#0F172A]">
                         {similar.location}
@@ -733,7 +786,7 @@ export default async function ExpertDetailPage({
                     {expert.name}
                   </p>
                   <p className="truncate text-sm font-bold text-[#374151]">
-                    {expert.specialty}
+                    {primarySpecialty}
                   </p>
                 </div>
               </div>
@@ -791,7 +844,7 @@ export default async function ExpertDetailPage({
         <div className="mx-auto flex w-full max-w-6xl items-center gap-3">
           <div className="hidden min-w-0 flex-1 sm:block">
             <p className="truncate text-sm font-black text-[#0F172A]">
-              {expert.name} · {expert.specialty}
+              {expert.name} · {primarySpecialty}
             </p>
             <p className="mt-1 text-xs font-bold text-[#374151]">
               ⭐ {displayRating.toFixed(2)} · 상담 {consultationCount}건 ·{" "}

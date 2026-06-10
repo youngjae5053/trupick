@@ -107,7 +107,6 @@ export default function AuthNav() {
       <Link
         href="/become-expert"
         style={secondaryMobileLinkStyle}
-        className="hidden sm:inline"
       >
         전문가 등록
       </Link>
@@ -146,8 +145,8 @@ export default function AuthNav() {
             </>
           ) : role === "expert" ? (
             <>
-              <Link href="/register" style={linkStyle}>
-                전문가 등록
+              <Link href="/register?mode=edit" style={linkStyle}>
+                프로필 수정
               </Link>
               <Link href="/my-consultations" style={linkStyle}>
                 내 상담

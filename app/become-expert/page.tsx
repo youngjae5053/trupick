@@ -77,8 +77,9 @@ export default function BecomeExpertPage() {
           <p className="text-sm font-black uppercase tracking-[0.24em] text-[#0F5132]">
             Become a Verified Expert
           </p>
-          <h1 className="mt-5 max-w-4xl text-[clamp(3rem,9vw,6.5rem)] font-black leading-[0.95] tracking-[-0.05em] text-[#111111]">
-            검증된 운동 전문가로 소개되세요.
+          <h1 className="mt-5 max-w-4xl text-[clamp(2.6rem,7vw,5.2rem)] font-black leading-[1.02] tracking-[-0.035em] text-[#111111]">
+            <span className="block">검증된 운동 전문가로</span>
+            <span className="block">소개되세요.</span>
           </h1>
           <p className="mt-7 max-w-2xl text-lg font-bold leading-8 text-[#374151] sm:text-xl">
             TRUPICK은 아무나 노출하지 않습니다. 전문성과 사례를 가진
