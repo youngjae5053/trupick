@@ -39,10 +39,14 @@ add column if not exists admin_video_url text,
 add column if not exists admin_featured_image text,
 add column if not exists admin_verification_comment text,
 add column if not exists admin_internal_score integer,
-add column if not exists admin_approval_memo text;
+add column if not exists admin_approval_memo text,
+add column if not exists updated_at timestamptz default now();
 
 create index if not exists experts_approval_status_idx
 on public.experts (approval_status);
+
+create index if not exists experts_user_updated_idx
+on public.experts (user_id, updated_at desc);
 
 drop policy if exists "Experts can read own profiles" on public.experts;
 drop policy if exists "Experts can update own profiles for review" on public.experts;

@@ -57,6 +57,44 @@ type ExistingExpert = {
   status?: ExpertStatus | null;
 };
 
+type SupabaseExpertPayload = {
+  user_id: string;
+  name: string;
+  phone: string;
+  location: string;
+  activity_area: string;
+  detailed_location: string;
+  center_name: string;
+  map_address: string;
+  latitude: number | null;
+  longitude: number | null;
+  specialty: string;
+  specialties: string[];
+  career_years: string;
+  career_summary: string;
+  career: string;
+  certifications: string[];
+  profile_images: string[];
+  main_profile_image: string | null;
+  image_url: string | null;
+  intro_line: string;
+  philosophy: string;
+  description: string;
+  cases: ExpertCase[];
+  consultation_methods: string[];
+  consultation_fee: string;
+  portfolio_url: string;
+  sns_url: string;
+  video_url: string;
+  extra_intro: string;
+  profile_completion_score: number;
+  plan_type: "free";
+  approved: boolean;
+  approval_status: ExpertStatus;
+  status: ExpertStatus;
+  updated_at: string;
+};
+
 const wizardSteps = [
   { id: 1, label: "기본 정보", title: "고객이 가장 먼저 보는 정보를 입력해주세요." },
   { id: 2, label: "전문성", title: "전문가로 활동한 이력을 알려주세요." },
@@ -179,7 +217,6 @@ export default function RegisterPage() {
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
   const [checkingAuth, setCheckingAuth] = useState(true);
-  const [accessDenied, setAccessDenied] = useState(false);
   const [expertId, setExpertId] = useState<number | null>(null);
   const [currentStatus, setCurrentStatus] = useState<ExpertStatus | null>(null);
   const [message, setMessage] = useState("");
@@ -243,13 +280,22 @@ export default function RegisterPage() {
           console.error("register profile lookup error", profileError);
         }
 
-        const role =
-          profile?.role ?? (user.user_metadata?.role as UserRole | undefined);
+        if (!profile && profileError) {
+          setMessage(
+            "프로필 정보는 불러오지 못했지만 등록은 계속할 수 있습니다."
+          );
+        }
 
-        if (role !== "expert" && role !== "admin") {
-          setAccessDenied(true);
-          setCheckingAuth(false);
-          return;
+        if (!profile) {
+          const fallbackName =
+            (user.user_metadata?.name as string | undefined) ||
+            (user.user_metadata?.full_name as string | undefined) ||
+            user.email?.split("@")[0] ||
+            "";
+
+          if (fallbackName) {
+            setName((current) => current || fallbackName);
+          }
         }
 
         const { data: existing, error: expertError } = await supabase
@@ -262,6 +308,9 @@ export default function RegisterPage() {
 
         if (expertError) {
           console.error("register existing expert lookup error", expertError);
+          setMessage(
+            "기존 저장 정보를 불러오지 못했지만 새로 저장할 수 있습니다."
+          );
         }
 
         if (existing && isMounted) {
@@ -308,7 +357,9 @@ export default function RegisterPage() {
       } catch (error) {
         console.error("register load error", error);
         if (isMounted) {
-          setErrorMessage("전문가 등록 정보를 불러오지 못했습니다. 콘솔의 오류를 확인해주세요.");
+          setMessage(
+            "일부 정보를 불러오지 못했지만 등록은 계속할 수 있습니다."
+          );
           setCheckingAuth(false);
         }
       }
@@ -441,12 +492,6 @@ export default function RegisterPage() {
 
   function validateSubmit(mode: SaveMode) {
     if (mode === "draft") {
-      if (!name.trim()) {
-        setErrorMessage("임시 저장을 위해 이름은 입력해주세요.");
-        setCurrentStep(1);
-        return false;
-      }
-
       return true;
     }
 
@@ -502,6 +547,16 @@ export default function RegisterPage() {
           item.result.trim()
       );
       const mainImage = mainProfileImage || profileImages[0] || "";
+      const fallbackName =
+        name.trim() ||
+        (userData.user?.user_metadata?.name as string | undefined) ||
+        (userData.user?.user_metadata?.full_name as string | undefined) ||
+        userData.user?.email?.split("@")[0] ||
+        "이름 미입력";
+      const fallbackSpecialty =
+        specialtyItems[0] || specialty.trim() || "전문 분야 미입력";
+      const fallbackLocation = activityArea.trim() || "활동 지역 미입력";
+      const fallbackIntro = introLine.trim() || "한 줄 소개 미입력";
       const locationLabel = [activityArea.trim(), detailedLocation.trim()]
         .filter(Boolean)
         .join(" · ");
@@ -537,27 +592,27 @@ export default function RegisterPage() {
           .join("\n\n"),
       ].join("\n");
 
-      const payload = {
+      const payload: SupabaseExpertPayload = {
         user_id: userId,
-        name: name.trim(),
+        name: fallbackName,
         phone: phone.trim(),
-        location: locationLabel || activityArea.trim(),
+        location: locationLabel || fallbackLocation,
         activity_area: activityArea.trim(),
         detailed_location: detailedLocation.trim(),
         center_name: centerName.trim(),
         map_address: mapAddress.trim(),
         latitude: latitude.trim() ? Number(latitude) : null,
         longitude: longitude.trim() ? Number(longitude) : null,
-        specialty: specialtyItems[0] ?? specialty.trim(),
+        specialty: fallbackSpecialty,
         specialties: specialtyItems,
         career_years: careerYears.trim(),
         career_summary: careerSummary.trim(),
         career: legacyCareer,
         certifications: splitList(certifications),
         profile_images: profileImages,
-        main_profile_image: mainImage,
+        main_profile_image: mainImage || null,
         image_url: mainImage || null,
-        intro_line: introLine.trim(),
+        intro_line: fallbackIntro,
         philosophy: philosophy.trim(),
         description: legacyDescription,
         cases: filteredCases,
@@ -572,13 +627,33 @@ export default function RegisterPage() {
         approved: false,
         approval_status: nextStatus,
         status: nextStatus,
+        updated_at: new Date().toISOString(),
       };
 
-      const { data, error } = expertId
+      let targetExpertId = expertId;
+
+      if (!targetExpertId) {
+        const { data: existingByUser, error: existingByUserError } =
+          await supabase
+            .from("experts")
+            .select("id")
+            .eq("user_id", userId)
+            .order("id", { ascending: false })
+            .limit(1)
+            .maybeSingle<{ id: number }>();
+
+        if (existingByUserError) {
+          console.error("expert application existing lookup error", existingByUserError);
+        }
+
+        targetExpertId = existingByUser?.id ?? null;
+      }
+
+      const { data, error } = targetExpertId
         ? await supabase
             .from("experts")
             .update(payload)
-            .eq("id", expertId)
+            .eq("id", targetExpertId)
             .select("id, approval_status")
             .maybeSingle<{ id: number; approval_status: ExpertStatus }>()
         : await supabase
@@ -589,7 +664,9 @@ export default function RegisterPage() {
 
       if (error) {
         console.error("expert application save error", error);
-        setErrorMessage(getFriendlyErrorMessage(error.message));
+        setErrorMessage(
+          `${getFriendlyErrorMessage(error.message)} (${error.message})`
+        );
         setSavingMode(null);
         return;
       }
@@ -639,30 +716,6 @@ export default function RegisterPage() {
             Checking Session
           </p>
           <h1 className="mt-3 text-3xl font-black">로그인 상태를 확인하고 있습니다.</h1>
-        </section>
-      </main>
-    );
-  }
-
-  if (accessDenied) {
-    return (
-      <main className="min-h-screen bg-[#F6F3EC] px-4 py-10 text-[#111111]">
-        <section className="mx-auto max-w-3xl rounded-[8px] border border-[#E5E7EB] bg-white p-8">
-          <p className="text-sm font-black uppercase tracking-[0.18em] text-[#D65339]">
-            Expert Only
-          </p>
-          <h1 className="mt-3 text-3xl font-black">전문가 회원만 등록 가능합니다</h1>
-          <p className="mt-3 text-sm font-bold leading-7 text-[#374151]">
-            현재 계정은 고객 회원입니다. 전문가로 활동하려면 전문가 계정으로 가입하거나 관리자에게 권한 변경을 요청해주세요.
-          </p>
-          <div className="mt-6 flex flex-wrap gap-3">
-            <Link href="/signup" className="rounded-full bg-[#0F5132] px-5 py-3 text-sm font-black text-white">
-              전문가 계정 만들기
-            </Link>
-            <Link href="/experts" className="rounded-full border border-[#D9CFBF] bg-white px-5 py-3 text-sm font-black text-[#111111]">
-              전문가 둘러보기
-            </Link>
-          </div>
         </section>
       </main>
     );

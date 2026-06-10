@@ -25,7 +25,7 @@ export function getFriendlyErrorMessage(message?: string | null) {
   }
 
   if (normalized.includes("schema cache") || normalized.includes("column")) {
-    return "필요한 정보를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.";
+    return "저장에 필요한 DB 컬럼 또는 마이그레이션이 아직 적용되지 않았습니다.";
   }
 
   return "처리 중 오류가 발생했습니다. 입력 내용을 확인한 뒤 다시 시도해주세요.";

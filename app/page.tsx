@@ -207,14 +207,13 @@ export default function HomePage() {
           <p className="text-sm font-black uppercase tracking-[0.28em] text-[#0F5132]">
             PREMIUM VERIFIED NETWORK
           </p>
-          <h1 className="mt-6 max-w-4xl text-[clamp(2.6rem,7vw,4.8rem)] font-extrabold leading-[1.04] tracking-normal text-[#111111] sm:tracking-[-0.035em]">
-            좋은 전문가를 찾는 일,
+          <h1 className="mt-6 max-w-3xl text-[clamp(2.35rem,6vw,4.1rem)] font-extrabold leading-[1.08] tracking-normal text-[#111111]">
+            검증된 전문가
             <br />
-            TRUPICK이 더 쉽게 만듭니다.
+            TRUPICK에서.
           </h1>
           <p className="mt-7 max-w-2xl text-lg font-bold leading-8 text-[#374151] sm:text-xl">
-            운동 · 재활 · 체형교정 전문가를 TRUPICK의 선별 기준으로
-            추천받아보세요.
+            운동 · 체형교정 · 재활 전문가를 선별 기준에 따라 추천합니다.
           </p>
 
           <form

@@ -741,7 +741,7 @@ function ExpertPanel({
         </div>
 
         <Link
-          href="/register"
+          href="/register?mode=edit"
           className="mt-5 block rounded-full bg-[#0F5132] px-5 py-3 text-center text-sm font-black text-white"
         >
           프로필 수정
